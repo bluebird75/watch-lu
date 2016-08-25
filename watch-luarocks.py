@@ -56,8 +56,7 @@ def get_nb_dl_and_archive():
         nb_dl_luarocks = []
         dbdict[ NB_DL_LUAROCKS ] = nb_dl_luarocks
     nb_dl_luarocks.append( ( today, nb_dl ) )
-    # dbdict[ NB_DL_LUAROCKS ] = 
-    remove_duplicates( nb_dl_luarocks )
+    dbdict[ NB_DL_LUAROCKS ] = remove_duplicates( nb_dl_luarocks )
     print(dbdict)
 
 def remove_duplicates( nb_dl_luarocks ):
