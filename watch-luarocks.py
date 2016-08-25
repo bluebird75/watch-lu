@@ -1,8 +1,9 @@
 from bs4 import BeautifulSoup
 import datetime
 import requests
-import os, ast, pprint
+import os, ast, pprint, subprocess, functools
 
+LUARCOKS_NO_FETCH=False
 LUAROCKS_PROJECT='http://luarocks.org/modules/bluebird75/luaunit'
 FNAME_LUAROCKS_RESULTS = 'luarocks_results.txt'
 NB_DL_LUAROCKS='NB_DL_LUAROCKS'
@@ -29,7 +30,7 @@ def get_nb_dl_on_luarocks( luarocks_url, fname ):
     return r.text
 
 def get_nb_dl():
-    if os.path.exists(FNAME_LUAROCKS_RESULTS):
+    if LUARCOKS_NO_FETCH and os.path.exists(FNAME_LUAROCKS_RESULTS):
         s = open(FNAME_LUAROCKS_RESULTS).read()
     else:
         s = get_nb_dl_on_luarocks( LUAROCKS_PROJECT, FNAME_LUAROCKS_RESULTS )
@@ -55,7 +56,18 @@ def get_nb_dl_and_archive():
         nb_dl_luarocks = []
         dbdict[ NB_DL_LUAROCKS ] = nb_dl_luarocks
     nb_dl_luarocks.append( ( today, nb_dl ) )
+    # dbdict[ NB_DL_LUAROCKS ] = 
+    remove_duplicates( nb_dl_luarocks )
     print(dbdict)
+
+def remove_duplicates( nb_dl_luarocks ):
+    nb_dl_luarocks.sort()
+    # print( 'old dl', nb_dl_luarocks )
+    new_dl = functools.reduce( lambda li, e: li + [e] if len(li) == 0 or li[-1] != e else li, nb_dl_luarocks, [] )
+    # print( 'new_dl', new_dl )
+    if len(new_dl) != len(nb_dl_luarocks):
+        print( 'Removed %d duplicates' % (len(nb_dl_luarocks) - len(new_dl)))
+    return new_dl
 
 def init_db_dict():
     '''Load dbdict from disk'''
@@ -75,7 +87,20 @@ def save_db_dict():
     f.write(s)
     f.close()
 
-if __name__ == '__main__':
+def git_pull():
+    subprocess.call(['git', 'pull'])
+
+def git_commit_and_push():
+    subprocess.call(['git', 'commit', '-m', 'DB update', 'dbdict.txt'])
+    subprocess.call(['git', 'push'])
+
+
+def main():
+    git_pull()
     init_db_dict()
     get_nb_dl_and_archive()
     save_db_dict()
+    git_commit_and_push()
+
+if __name__ == '__main__':
+    main()
