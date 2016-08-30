@@ -73,23 +73,12 @@ def watch_luarocks():
 GH_DATA_HAVE_LUAUNIT_FILE='GH_DATA_HAVE_LUAUNIT_FILE'
 GH_DATA_REF_LUAUNIT_CODE ='GH_DATA_REF_LUAUNIT_CODE'
 
-GH_HAVE_LUAUNIT_FILE_RESULTS='gh_have_luaunit_file_results.txt'
-GH_REF_LUAUNIT_CODE_RESULTS ='gh_ref_luaunit_code_results.txt'
-
 def gh_data_fetch_and_archive_have_luaunit_file():
     r = requests.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults')
-    f = open(GH_HAVE_LUAUNIT_FILE_RESULTS, 'w')
-    # print(f.encoding)
-    f.write(r.text)
-    f.close()
     return r.text
 
 def gh_data_fetch_and_archive_ref_luaunit_code():
     r = requests.get('https://github.com/search?utf8=%E2%9C%93&q=luaunit.lua&type=Code&ref=searchresults')
-    f = open(GH_REF_LUAUNIT_CODE_RESULTS, 'w')
-    # print(f.encoding)
-    f.write(r.text)
-    f.close()
     return r.text
 
 def count_results( data ):
