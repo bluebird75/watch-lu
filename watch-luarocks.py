@@ -11,18 +11,23 @@ DBDICT_INIT_VAL = {}
 
 
 def extract_digit( s ):
+    '''Extract the digits from a complex string'''
     v_s = ''.join( c for c in s if c.isdigit() )
     v = int(v_s)
     return v
 
 def remove_duplicates( nb_val ):
+    '''Data is formatted as (isodate, nb of something)
+    In case of duplicates, keep only the latest value
+    '''
     nb_val.sort()
-    new_nb_val = functools.reduce( lambda li, e: li + [e] if len(li) == 0 or li[-1] != e else li, nb_val, [] )
+    new_nb_val = functools.reduce( lambda li, e: li + [e] if len(li) == 0 or li[-1][0] != e[0] else li, nb_val, [] )
     if len(new_nb_val) != len(nb_val):
         print( 'Removed %d duplicates' % (len(nb_val) - len(new_nb_val)))
     return new_nb_val
 
 def update_db_list( key, data ):
+    '''Update our dbdict with a new entry, create the db column if needed'''
     if key in dbdict:
         list_val = dbdict[ key ]
     else:
@@ -131,7 +136,6 @@ def git_pull():
 def git_commit_and_push():
     subprocess.call(['git', 'commit', '--quiet', '-m', 'DB update', 'dbdict.txt'])
     subprocess.call(['git', 'push', '--quiet'])
-
 
 def github_db_commit_push():
     git_commit_and_push()
