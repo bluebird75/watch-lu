@@ -118,14 +118,17 @@ def gh_login():
     if not(GH_USER) or not(GH_PWD):
         raise ValueError("GH_USER and GH_PWD must be set for this action. Current values: %s, %s" % (GH_USER, GH_PWD) )
     payload = { 'authenticity_token': input_auth_token, 'utf8' : input_utf8, 'login': GH_USER, 'password' : GH_PWD,   }
-    print(str(payload).encode('cp1252', 'replace'))
+    # print(str(payload).encode('cp1252', 'replace'))
     r = s.post( 'https://github.com/session', data=payload  )
     open('gh_login2.txt', 'wb').write( r.text.encode('utf8') )
-    return s
 
-    # perform search
-    r = s.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults')
-    open('gh_login3.txt', 'wb').write( r.text.encode('utf8') )
+    # validate login
+    soup = BeautifulSoup( r.text, "html.parser" )
+    if soup.get_text().find('Incorrect username or password') != -1:
+        print('Login failed! user="%s" pwd="%s"' % (GH_USER, GH_PWD) )
+        return s, False
+
+    return s, True
 
 def count_results( data ):
     soup = BeautifulSoup( data, "html.parser" )
@@ -135,7 +138,9 @@ def count_results( data ):
     return nb
 
 def watch_gh_data():
-    session = gh_login()
+    session, success = gh_login()
+    if not success:
+        return
     nb_have_luaunit_file = count_results( gh_data_fetch_and_archive_have_luaunit_file(session) )
     nb_ref_luaunit_code = count_results( gh_data_fetch_and_archive_ref_luaunit_code(session) )
     today = datetime.date.today().isoformat()
