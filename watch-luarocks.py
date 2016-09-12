@@ -106,10 +106,6 @@ def watch_gh_data():
 def watch_gh_metadata():
     g = Github(GH_USER, GH_PWD)
     lu_repo = g.get_repo('bluebird75/luaunit')
-    # repos = g.search_code('q=filename:luaunit.lua')
-    # for repo in repos:
-    print(lu_repo.name )
-    # print('subscribers_count=', lu_repo.subscribers_count )
     lu_repo_metadata = {
         'forks_count'       : lu_repo.forks_count,
         'stargazers_count'  : lu_repo.stargazers_count,
@@ -175,12 +171,12 @@ if __name__ == '__main__':
         print('Unrecognised action: ', ' '.join(not_recognised))
         sys.exit(1)
 
-    # git_pull()
+    git_pull()
     init_db_dict()
 
     for action in sys.argv[1:]:
         ACTIONS[action]()
 
     pprint.pprint( dbdict )
-    # save_db_dict()
+    save_db_dict()
 
