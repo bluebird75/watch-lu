@@ -1,8 +1,6 @@
 from bs4 import BeautifulSoup
 import requests
 
-from github import Github
-
 import sys, os, ast, pprint, subprocess, functools, datetime
 
 # Global config
@@ -75,6 +73,12 @@ def watch_luarocks():
 #
 #               GitHub stuff
 
+try:
+    from github import Githubx
+    HAS_GH_API=True
+except ImportError:
+    HAS_GH_API=False
+
 GH_DATA_HAVE_LUAUNIT_FILE='GH_DATA_HAVE_LUAUNIT_FILE'
 GH_DATA_REF_LUAUNIT_CODE ='GH_DATA_REF_LUAUNIT_CODE'
 GH_METADATA = 'GH_METADATA'
@@ -104,6 +108,9 @@ def watch_gh_data():
     # print(dbdict)
 
 def watch_gh_metadata():
+    if not HAS_GH_API:
+        print("GitHub API not available...")
+        sys.exit(1)
     g = Github(GH_USER, GH_PWD)
     lu_repo = g.get_repo('bluebird75/luaunit')
     lu_repo_metadata = {
