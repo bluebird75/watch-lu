@@ -107,7 +107,7 @@ def gh_login():
 
     # open login page
     r = s.get( 'https://github.com/login' )
-    open('gh_login1.txt', 'w').write( r.text )
+    open('gh_login1.txt', 'wb').write( r.text.encode('utf8' ) )
 
     # perform login
     soup = BeautifulSoup( r.text, "html.parser" )
@@ -118,7 +118,7 @@ def gh_login():
     if not(GH_USER) or not(GH_PWD):
         raise ValueError("GH_USER and GH_PWD must be set for this action. Current values: %s, %s" % (GH_USER, GH_PWD) )
     payload = { 'authenticity_token': input_auth_token, 'utf8' : input_utf8, 'login': GH_USER, 'password' : GH_PWD,   }
-    # print(str(payload).encode('cp1252', 'replace'))
+    print(str(payload).encode('cp1252', 'replace'))
     r = s.post( 'https://github.com/session', data=payload  )
     open('gh_login2.txt', 'wb').write( r.text.encode('utf8') )
     return s
