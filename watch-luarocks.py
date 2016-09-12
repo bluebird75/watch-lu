@@ -4,8 +4,6 @@ import requests
 import sys, os, ast, pprint, subprocess, functools, datetime
 
 # Global config
-GH_USER=os.getenv('GH_USER')
-GH_PWD=os.getenv('GH_PWD')
 
 DBDICT_FNAME='dbdict.txt'
 # our minimalist db
@@ -18,6 +16,11 @@ def extract_digit( s ):
     v_s = ''.join( c for c in s if c.isdigit() )
     v = int(v_s)
     return v
+
+def sanitize_quotes( s ):
+    if len(s) > 1 and s[0] == '"' and s[-1] == '"':
+        return s[1:-1]
+    return s
 
 def remove_duplicates( nb_val ):
     '''Data is formatted as (isodate, nb of something)
@@ -79,18 +82,50 @@ try:
 except ImportError:
     HAS_GH_API=False
 
+GH_USER=sanitize_quotes( os.getenv('GH_USER') )
+GH_PWD=sanitize_quotes( os.getenv('GH_PWD') )
+
 GH_DATA_HAVE_LUAUNIT_FILE='GH_DATA_HAVE_LUAUNIT_FILE'
 GH_DATA_REF_LUAUNIT_CODE ='GH_DATA_REF_LUAUNIT_CODE'
 GH_METADATA = 'GH_METADATA'
 
-def gh_data_fetch_and_archive_have_luaunit_file():
-    r = requests.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults')
-    print( r.text )
+def gh_data_fetch_and_archive_have_luaunit_file(session):
+    r = session.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults')
+    open('gh_login3.txt', 'wb').write( r.text.encode('utf8') )
     return r.text
 
-def gh_data_fetch_and_archive_ref_luaunit_code():
-    r = requests.get('https://github.com/search?utf8=%E2%9C%93&q=luaunit.lua&type=Code&ref=searchresults')
+def gh_data_fetch_and_archive_ref_luaunit_code(session):
+    r = session.get('https://github.com/search?utf8=%E2%9C%93&q=luaunit.lua&type=Code&ref=searchresults')
+    open('gh_login4.txt', 'wb').write( r.text.encode('utf8') )
     return r.text
+
+def printtag( t ):
+    print( t.encode('cp1252', 'replace') )
+
+def gh_login():
+    s = requests.Session()
+
+    # open login page
+    r = s.get( 'https://github.com/login' )
+    open('gh_login1.txt', 'w').write( r.text )
+
+    # perform login
+    soup = BeautifulSoup( r.text, "html.parser" )
+    input_utf8 = soup.find_all('input')[0]['value']
+    input_auth_token = soup.find_all('input')[1]['value']
+    # printtag( input_utf8 )
+    # printtag( input_auth_token )
+    if not(GH_USER) or not(GH_PWD):
+        raise ValueError("GH_USER and GH_PWD must be set for this action. Current values: %s, %s" % (GH_USER, GH_PWD) )
+    payload = { 'authenticity_token': input_auth_token, 'utf8' : input_utf8, 'login': GH_USER, 'password' : GH_PWD,   }
+    # print(str(payload).encode('cp1252', 'replace'))
+    r = s.post( 'https://github.com/session', data=payload  )
+    open('gh_login2.txt', 'wb').write( r.text.encode('utf8') )
+    return s
+
+    # perform search
+    r = s.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults')
+    open('gh_login3.txt', 'wb').write( r.text.encode('utf8') )
 
 def count_results( data ):
     soup = BeautifulSoup( data, "html.parser" )
@@ -100,12 +135,13 @@ def count_results( data ):
     return nb
 
 def watch_gh_data():
+    session = gh_login()
+    nb_have_luaunit_file = count_results( gh_data_fetch_and_archive_have_luaunit_file(session) )
+    nb_ref_luaunit_code = count_results( gh_data_fetch_and_archive_ref_luaunit_code(session) )
     today = datetime.date.today().isoformat()
-    nb_have_luaunit_file = count_results( gh_data_fetch_and_archive_have_luaunit_file() )
-    nb_ref_luaunit_code = count_results( gh_data_fetch_and_archive_ref_luaunit_code() )
     update_db_list( GH_DATA_HAVE_LUAUNIT_FILE, (today, nb_have_luaunit_file) )
     update_db_list( GH_DATA_REF_LUAUNIT_CODE , (today, nb_ref_luaunit_code ) )
-    # print(dbdict)
+    print(dbdict)
 
 def watch_gh_metadata():
     if not HAS_GH_API:
