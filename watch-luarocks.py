@@ -77,7 +77,7 @@ def watch_luarocks():
 #               GitHub stuff
 
 try:
-    from github import Githubx
+    from github import Github
     HAS_GH_API=True
 except ImportError:
     HAS_GH_API=False
