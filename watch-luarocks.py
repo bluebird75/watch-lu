@@ -82,12 +82,21 @@ try:
 except ImportError:
     HAS_GH_API=False
 
-GH_USER=sanitize_quotes( os.getenv('GH_USER') )
-GH_PWD=sanitize_quotes( os.getenv('GH_PWD') )
-
 GH_DATA_HAVE_LUAUNIT_FILE='GH_DATA_HAVE_LUAUNIT_FILE'
 GH_DATA_REF_LUAUNIT_CODE ='GH_DATA_REF_LUAUNIT_CODE'
 GH_METADATA = 'GH_METADATA'
+
+def get_gh_user_pwd():
+    home = os.getenv('HOME')
+    try:
+        path = '%s/.ssh/GH_USER' % home
+        user = open(path).read().strip()
+        path = '%s/.ssh/GH_PWD' % home
+        pwd  = open(path).read().strip()
+    except IOError:
+        print('Could not read file %s' % path)
+        return None, None
+    return user, pwd
 
 def gh_data_fetch_and_archive_have_luaunit_file(session):
     r = session.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults')
@@ -115,9 +124,10 @@ def gh_login():
     input_auth_token = soup.find_all('input')[1]['value']
     # printtag( input_utf8 )
     # printtag( input_auth_token )
-    if not(GH_USER) or not(GH_PWD):
-        raise ValueError("GH_USER and GH_PWD must be set for this action. Current values: %s, %s" % (GH_USER, GH_PWD) )
-    payload = { 'authenticity_token': input_auth_token, 'utf8' : input_utf8, 'login': GH_USER, 'password' : GH_PWD,   }
+    user, pwd = get_gh_user_pwd()
+    if not(user) or not(pwd):
+        raise ValueError("GH_USER and GH_PWD must be set for this action. Current values: %s, %s" % (user, pwd) )
+    payload = { 'authenticity_token': input_auth_token, 'utf8' : input_utf8, 'login': user, 'password' : pwd,   }
     # print(str(payload).encode('cp1252', 'replace'))
     r = s.post( 'https://github.com/session', data=payload  )
     open('gh_login2.txt', 'wb').write( r.text.encode('utf8') )
