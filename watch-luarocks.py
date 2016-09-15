@@ -95,7 +95,7 @@ def get_gh_user_pwd():
         pwd  = open(path).read().strip()
     except IOError:
         print('Could not read file %s' % path)
-        return None, None
+        raise ValueError("GH_USER and GH_PWD must be set for this action.")
     return user, pwd
 
 def gh_data_fetch_and_archive_have_luaunit_file(session):
@@ -125,8 +125,6 @@ def gh_login():
     # printtag( input_utf8 )
     # printtag( input_auth_token )
     user, pwd = get_gh_user_pwd()
-    if not(user) or not(pwd):
-        raise ValueError("GH_USER and GH_PWD must be set for this action. Current values: %s, %s" % (user, pwd) )
     payload = { 'authenticity_token': input_auth_token, 'utf8' : input_utf8, 'login': user, 'password' : pwd,   }
     # print(str(payload).encode('cp1252', 'replace'))
     r = s.post( 'https://github.com/session', data=payload  )
@@ -162,7 +160,7 @@ def watch_gh_metadata():
     if not HAS_GH_API:
         print("GitHub API not available...")
         sys.exit(1)
-    g = Github(GH_USER, GH_PWD)
+    g = Github( *get_gh_user_pwd() )
     lu_repo = g.get_repo('bluebird75/luaunit')
     lu_repo_metadata = {
         'forks_count'       : lu_repo.forks_count,
