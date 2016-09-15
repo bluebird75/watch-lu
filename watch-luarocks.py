@@ -18,7 +18,7 @@ def extract_digit( s ):
     return v
 
 def sanitize_quotes( s ):
-    if len(s) > 1 and s[0] == '"' and s[-1] == '"':
+    if s and len(s) > 1 and s[0] == '"' and s[-1] == '"':
         return s[1:-1]
     return s
 
