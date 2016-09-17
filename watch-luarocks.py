@@ -154,7 +154,7 @@ def watch_gh_data():
     today = datetime.date.today().isoformat()
     update_db_list( GH_DATA_HAVE_LUAUNIT_FILE, (today, nb_have_luaunit_file) )
     update_db_list( GH_DATA_REF_LUAUNIT_CODE , (today, nb_ref_luaunit_code ) )
-    print(dbdict)
+    # print(dbdict)
 
 def watch_gh_metadata():
     if not HAS_GH_API:
