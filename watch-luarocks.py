@@ -98,18 +98,20 @@ def get_gh_user_pwd():
         raise ValueError("GH_USER and GH_PWD must be set for this action.")
     return user, pwd
 
-def gh_data_fetch_and_archive_have_luaunit_file(session):
-    r = session.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults')
+def gh_data_fetch_and_archive_have_luaunit_file(session, page=None):
+    pageref='&p=%d' % page if page else ''
+    r = session.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults' + pageref)
     open('gh_login3.txt', 'wb').write( r.text.encode('utf8') )
     return r.text
 
-def gh_data_fetch_and_archive_ref_luaunit_code(session):
-    r = session.get('https://github.com/search?utf8=%E2%9C%93&q=luaunit.lua&type=Code&ref=searchresults')
+def gh_data_fetch_and_archive_ref_luaunit_code(session, page=None):
+    pageref='&p=%d' % page if page else ''
+    r = session.get('https://github.com/search?utf8=%E2%9C%93&q=luaunit.lua&type=Code&ref=searchresults' + pageref)
     open('gh_login4.txt', 'wb').write( r.text.encode('utf8') )
     return r.text
 
-def printtag( t ):
-    print( t.encode('cp1252', 'replace') )
+def printtag( info, t ):
+    print( '%s=' % info, t.encode('cp1252', 'replace') )
 
 def gh_login():
     s = requests.Session()
@@ -155,6 +157,69 @@ def watch_gh_data():
     update_db_list( GH_DATA_HAVE_LUAUNIT_FILE, (today, nb_have_luaunit_file) )
     update_db_list( GH_DATA_REF_LUAUNIT_CODE , (today, nb_ref_luaunit_code ) )
     # print(dbdict)
+
+def extract_project_info( page ):
+    soup = BeautifulSoup( page, "html.parser" )
+    all_code = soup.find_all("div", "code-list-item")
+    all_info = []
+    for code_item in all_code:
+        d = {}
+        # printtag( 'code_item', str(code_item ) )
+        proj_auth_name = code_item.p.a.string
+        # print( proj_auth_name )
+        proj_auth, proj_name = proj_auth_name.split('/')
+        # print( code_item.p.next_sibling.next_sibling )
+        path_item = code_item.p.next_sibling.next_sibling.a
+        proj_luau_relpath = ''.join( path_item.strings ) 
+        proj_luau_fullpath = 'https://github.com/' + path_item['href']
+        # print( proj_luau_relpath )
+        d['name'] = proj_name
+        d['author'] = proj_auth
+        d['proj_path'] = 'https://github.com/' + proj_auth_name
+        d['luau_full_path'] = proj_luau_fullpath
+        d['luau_rel_path'] = proj_luau_relpath
+        printtag( 'prof_info', str(d) )
+        all_info.append( d )
+    return all_info
+
+def extract_maxpage( page ):
+    soup = BeautifulSoup( page, "html.parser" )
+    next_page = soup.find("a", "next_page")
+    maxp = next_page.previous_sibling.previous_sibling.string
+    return int(maxp)
+
+def analyse_projects_data():
+    session, success = gh_login()
+    if not success:
+        return
+    projects = []
+
+    page = gh_data_fetch_and_archive_have_luaunit_file(session)
+    maxpage = extract_maxpage( page )
+    maxpage = 2
+
+    for pnb in range(1, maxpage+1):
+        page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
+
+        page_projects = extract_project_info( page )
+        # print( page_projects )
+        projects.extend( page_projects )
+
+    # for each project
+    # check if project is a luaunit clone
+    # check version of luaunit
+    # check presence of travis yml
+    f = open('projects.csv', 'wb')
+    fields = ( 'name', 'author', 'proj_path', 'luau_rel_path', 'luau_full_path')
+    f.write( b';'.join( s.encode('cp1252', 'replace') for s in fields ) )
+    f.write(b'\n')
+    for proj_info in projects:
+        for k in fields:
+            f.write( proj_info[k].encode('cp1252', 'replace') )
+            f.write(b';')
+        f.write(b'\n')
+    f.close()
+
 
 def watch_gh_metadata():
     if not HAS_GH_API:
@@ -214,10 +279,12 @@ ACTIONS = {
     'watch_gh_data':  watch_gh_data,
     'watch_gh_metadata':  watch_gh_metadata,
     'gh_push': git_commit_and_push,
+    'analyse_projects_data': analyse_projects_data,
 }
 
 
 if __name__ == '__main__':
+
     if len(sys.argv) < 2:
         print('Possible ACTIONS: %s' % ', '.join(ACTIONS.keys()) )
         sys.exit(1)
@@ -227,7 +294,7 @@ if __name__ == '__main__':
         print('Unrecognised action: ', ' '.join(not_recognised))
         sys.exit(1)
 
-    git_pull()
+    # git_pull()
     init_db_dict()
 
     for action in sys.argv[1:]:
