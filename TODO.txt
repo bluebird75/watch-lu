@@ -1,0 +1,5 @@
+- archive day by day the versions of luaunit in usage
+- fetch the number of stars + followers for each project
+- check if some of the projects are under travis
+- check if they are successful under travis
+- generate graphs
