@@ -1,7 +1,7 @@
 from bs4 import BeautifulSoup
 import requests
 
-import sys, os, ast, pprint, subprocess, functools, datetime
+import sys, os, ast, pprint, subprocess, functools, datetime, collections, re, time, argparse
 
 # Global config
 
@@ -9,7 +9,21 @@ DBDICT_FNAME='dbdict.txt'
 # our minimalist db
 dbdict = None
 DBDICT_INIT_VAL = {}
+NET_SLEEP=None
+MAX_PAGES=None
 
+def init_net_sleep(v):
+    global NET_SLEEP
+    NET_SLEEP=v
+
+def set_max_pages( v ):
+    global MAX_PAGES
+    MAX_PAGES=v
+
+def net_sleep():
+    if NET_SLEEP:
+        # sleep to release the bandwidth pressure
+        time.sleep( NET_SLEEP )
 
 def extract_digit( s ):
     '''Extract the digits from a complex string'''
@@ -51,6 +65,7 @@ LUAROCKS_PROJECT='http://luarocks.org/modules/bluebird75/luaunit'
 NB_DL_LUAROCKS='NB_DL_LUAROCKS'
 
 def luarocks_fetch_nb_dl():
+    net_sleep()
     s = requests.get(LUAROCKS_PROJECT).text
     soup = BeautifulSoup( s, "html.parser" )
     e = soup.find_all(string='Downloads' )[0]
@@ -84,7 +99,9 @@ except ImportError:
 
 GH_DATA_HAVE_LUAUNIT_FILE='GH_DATA_HAVE_LUAUNIT_FILE'
 GH_DATA_REF_LUAUNIT_CODE ='GH_DATA_REF_LUAUNIT_CODE'
-GH_METADATA = 'GH_METADATA'
+GH_METADATA              = 'GH_METADATA'
+GH_LUAU_VERSIONS         = 'GH_LUAU_VERSIONS'
+NO_VERSION               = 'No version'
 
 def get_gh_user_pwd():
     home = os.getenv('HOME')
@@ -100,17 +117,19 @@ def get_gh_user_pwd():
 
 def gh_data_fetch_and_archive_have_luaunit_file(session, page=None):
     pageref='&p=%d' % page if page else ''
+    net_sleep()
     r = session.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults' + pageref)
     open('gh_login3.txt', 'wb').write( r.text.encode('utf8') )
     return r.text
 
 def gh_data_fetch_and_archive_ref_luaunit_code(session, page=None):
     pageref='&p=%d' % page if page else ''
+    net_sleep()
     r = session.get('https://github.com/search?utf8=%E2%9C%93&q=luaunit.lua&type=Code&ref=searchresults' + pageref)
     open('gh_login4.txt', 'wb').write( r.text.encode('utf8') )
     return r.text
 
-def printtag( info, t ):
+def enc_print( info, t ):
     print( '%s=' % info, t.encode('cp1252', 'replace') )
 
 def gh_login():
@@ -124,8 +143,8 @@ def gh_login():
     soup = BeautifulSoup( r.text, "html.parser" )
     input_utf8 = soup.find_all('input')[0]['value']
     input_auth_token = soup.find_all('input')[1]['value']
-    # printtag( input_utf8 )
-    # printtag( input_auth_token )
+    # enc_print( input_utf8 )
+    # enc_print( input_auth_token )
     user, pwd = get_gh_user_pwd()
     payload = { 'authenticity_token': input_auth_token, 'utf8' : input_utf8, 'login': user, 'password' : pwd,   }
     # print(str(payload).encode('cp1252', 'replace'))
@@ -158,29 +177,80 @@ def watch_gh_data():
     update_db_list( GH_DATA_REF_LUAUNIT_CODE , (today, nb_ref_luaunit_code ) )
     # print(dbdict)
 
-def extract_project_info( page ):
+def fname_is_luaunit( fpath ):
+    '''Return true if last part of the path is exactly luaunit.lua'''
+    fname = fpath.split('/')[-1]
+    return fname.lower() == 'luaunit.lua'
+
+reVersion = re.compile('Version:\s+(\d+\.\d+)')
+def get_luaunit_version( session, proj_luau_fullpath ):
+    '''Return None if not a luaunit official file. Return version string else'''
+    raw_luaunit_url = proj_luau_fullpath.replace('blob', 'raw')
+    net_sleep()
+    r = session.get(proj_luau_fullpath)
+    open('dl_luaunit.txt', 'wb').write( r.text.encode('utf8') )
+    if r.text.find('Philippe') == -1:
+        print('No philippe in %s' % raw_luaunit_url )
+        return None
+    if r.text.find('Fremy') == -1:
+        print('No fremy in %s' % raw_luaunit_url )
+        return None
+    if r.text.find('Version: ') == -1:
+        print('No version in %s' % raw_luaunit_url )
+        return NO_VERSION
+    mo = reVersion.search( r.text )
+    if not mo:
+        print('No parsable version in %s' % raw_luaunit_url )
+        return NO_VERSION
+    # print( mo )
+    version = mo.group(1)
+    # print( version )
+    return version
+
+def select_high_version( v1, v2):
+    if NO_VERSION in (v1, v2):
+        # one or two items are 'no version'
+        return (v2 if v2 != NO_VERSION else v1)
+    else:
+        return max(v2, v1)
+
+def add_project_info( session, projects, page ):
     soup = BeautifulSoup( page, "html.parser" )
     all_code = soup.find_all("div", "code-list-item")
-    all_info = []
     for code_item in all_code:
-        d = {}
-        # printtag( 'code_item', str(code_item ) )
+        print('.', end='')
+        # enc_print( 'code_item', str(code_item ) )
         proj_auth_name = code_item.p.a.string
+
         # print( proj_auth_name )
         proj_auth, proj_name = proj_auth_name.split('/')
         # print( code_item.p.next_sibling.next_sibling )
         path_item = code_item.p.next_sibling.next_sibling.a
         proj_luau_relpath = ''.join( path_item.strings ) 
         proj_luau_fullpath = 'https://github.com/' + path_item['href']
-        # print( proj_luau_relpath )
-        d['name'] = proj_name
-        d['author'] = proj_auth
-        d['proj_path'] = 'https://github.com/' + proj_auth_name
-        d['luau_full_path'] = proj_luau_fullpath
-        d['luau_rel_path'] = proj_luau_relpath
-        printtag( 'prof_info', str(d) )
-        all_info.append( d )
-    return all_info
+
+        if not fname_is_luaunit( proj_luau_relpath ): 
+            continue
+
+        luau_version = get_luaunit_version( session, proj_luau_fullpath )
+        if not luau_version:
+            continue
+
+        if proj_auth_name in projects:
+            d = projects[ proj_auth_name ]
+            assert( d['name'] == proj_name )
+            assert( d['author'] == proj_auth )
+        else:
+            d = collections.defaultdict(list)
+            projects[ proj_auth_name ] = d
+            d['name'] = proj_name
+            d['author'] = proj_auth
+            d['proj_path'] = 'https://github.com/' + proj_auth_name
+
+        d['luau_version'] = select_high_version( luau_version, d.get('luau_version', 'No version') )
+        d['luau_full_path'].append( proj_luau_fullpath )
+        d['luau_rel_path'] .append( proj_luau_relpath )
+        # enc_print( 'prof_info', str(d) )
 
 def extract_maxpage( page ):
     soup = BeautifulSoup( page, "html.parser" )
@@ -192,33 +262,46 @@ def analyse_projects_data():
     session, success = gh_login()
     if not success:
         return
-    projects = []
+    projects = {}
 
     page = gh_data_fetch_and_archive_have_luaunit_file(session)
     maxpage = extract_maxpage( page )
-    maxpage = 2
+    if MAX_PAGES:
+        maxpage = min(MAX_PAGES, maxpage)
 
     for pnb in range(1, maxpage+1):
         page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
 
-        page_projects = extract_project_info( page )
+        page_projects = add_project_info( session, projects, page )
         # print( page_projects )
-        projects.extend( page_projects )
 
-    # for each project
-    # check if project is a luaunit clone
-    # check version of luaunit
-    # check presence of travis yml
+    # step1 archive the already collected info
     f = open('projects.csv', 'wb')
-    fields = ( 'name', 'author', 'proj_path', 'luau_rel_path', 'luau_full_path')
+    fields = ( 'name', 'author', 'proj_path', 'luau_version', 'luau_rel_path', 'luau_full_path')
     f.write( b';'.join( s.encode('cp1252', 'replace') for s in fields ) )
     f.write(b'\n')
-    for proj_info in projects:
+    for proj_info in sorted( projects.keys() ):
         for k in fields:
-            f.write( proj_info[k].encode('cp1252', 'replace') )
+            v = projects[proj_info][k]
+            if type(v) == type(''):
+                f.write( v.encode('cp1252', 'replace') )
+            elif type(v) == type([]):
+                f.write( b'"' )
+                for vv in v:
+                    f.write( str(vv).encode('cp1252', 'replace') )
+                    f.write( b' ' )
+                f.write( b'"' )
             f.write(b';')
         f.write(b'\n')
     f.close()
+
+    all_versions_and_proj = [ (p['luau_version'], p['proj_path']) for p in projects.values()]
+    all_versions = set( v for (v,p) in all_versions_and_proj )
+    nbproj_with_version = [ (targetv, len( list( filter( lambda vp: vp[0] == targetv, all_versions_and_proj) ) ) )  for targetv in all_versions ]
+
+    today = datetime.date.today().isoformat()
+    update_db_list( GH_LUAU_VERSIONS, (today, nbproj_with_version ) )
+
 
 
 def watch_gh_metadata():
@@ -285,21 +368,37 @@ ACTIONS = {
 
 if __name__ == '__main__':
 
-    if len(sys.argv) < 2:
+    parser = argparse.ArgumentParser()
+    parser.add_argument( '--net-sleep' )
+    parser.add_argument( '--pages' )
+    parser.add_argument( '--print-db', action='store_true' )
+    parser.add_argument( 'actions', nargs='*' )
+    result = parser.parse_args()
+
+    if len(result.actions) < 1:
         print('Possible ACTIONS: %s' % ', '.join(ACTIONS.keys()) )
         sys.exit(1)
 
-    not_recognised = [ action for action in sys.argv[1:] if not( action in ACTIONS)  ]
+    not_recognised = [ action for action in result.actions if not( action in ACTIONS)  ]
     if len(not_recognised):
         print('Unrecognised action: ', ' '.join(not_recognised))
         sys.exit(1)
 
+    if result.net_sleep:
+        print('Network sleep: %d' % int(result.net_sleep) )
+        init_net_sleep( int(result.net_sleep) )
+
+    if result.pages:
+        print('Max pages: %d' % int(result.pages) )
+        set_max_pages( int( result.pages ) )
+
     # git_pull()
     init_db_dict()
 
-    for action in sys.argv[1:]:
+    for action in result.actions:
         ACTIONS[action]()
 
-    pprint.pprint( dbdict )
+    if result.print_db:
+        pprint.pprint( dbdict )
     save_db_dict()
 
