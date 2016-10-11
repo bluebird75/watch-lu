@@ -1,5 +1,6 @@
 from bs4 import BeautifulSoup
 import requests
+import six
 
 import sys, os, ast, pprint, subprocess, functools, datetime, collections, re, time, argparse
 
@@ -218,7 +219,7 @@ def add_project_info( session, projects, page ):
     soup = BeautifulSoup( page, "html.parser" )
     all_code = soup.find_all("div", "code-list-item")
     for code_item in all_code:
-        print('.', end='')
+        six.print_('.', end='')
         # enc_print( 'code_item', str(code_item ) )
         proj_auth_name = code_item.p.a.string
 
@@ -273,7 +274,7 @@ def analyse_projects_data():
         page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
 
         page_projects = add_project_info( session, projects, page )
-        print('P', end='')
+        six.print_('P', end='')
         # print( page_projects )
 
     # step1 archive the already collected info
@@ -284,7 +285,7 @@ def analyse_projects_data():
     for proj_info in sorted( projects.keys() ):
         for k in fields:
             v = projects[proj_info][k]
-            if type(v) == type(''):
+            if type(v) == six.text_type:
                 f.write( v.encode('cp1252', 'replace') )
             elif type(v) == type([]):
                 f.write( b'"' )
@@ -365,6 +366,7 @@ ACTIONS = {
     'gh_push': git_commit_and_push,
     'analyse_projects_data': analyse_projects_data,
 }
+HELP_ACTIONS = 'Possible ACTIONS: %s' % ', '.join(ACTIONS.keys())
 
 
 if __name__ == '__main__':
@@ -373,11 +375,11 @@ if __name__ == '__main__':
     parser.add_argument( '--net-sleep' )
     parser.add_argument( '--pages' )
     parser.add_argument( '--print-db', action='store_true' )
-    parser.add_argument( 'actions', nargs='*' )
+    parser.add_argument( 'actions', nargs='*', help=HELP_ACTIONS )
     result = parser.parse_args()
 
     if len(result.actions) < 1:
-        print('Possible ACTIONS: %s' % ', '.join(ACTIONS.keys()) )
+        print( HELP_ACTIONS )
         sys.exit(1)
 
     not_recognised = [ action for action in result.actions if not( action in ACTIONS)  ]
