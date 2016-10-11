@@ -190,17 +190,17 @@ def get_luaunit_version( session, proj_luau_fullpath ):
     r = session.get(proj_luau_fullpath)
     open('dl_luaunit.txt', 'wb').write( r.text.encode('utf8') )
     if r.text.find('Philippe') == -1:
-        print('No philippe in %s' % raw_luaunit_url )
+        # print('No philippe in %s' % raw_luaunit_url )
         return None
     if r.text.find('Fremy') == -1:
-        print('No fremy in %s' % raw_luaunit_url )
+        # print('No fremy in %s' % raw_luaunit_url )
         return None
     if r.text.find('Version: ') == -1:
-        print('No version in %s' % raw_luaunit_url )
+        # print('No version in %s' % raw_luaunit_url )
         return NO_VERSION
     mo = reVersion.search( r.text )
     if not mo:
-        print('No parsable version in %s' % raw_luaunit_url )
+        # print('No parsable version in %s' % raw_luaunit_url )
         return NO_VERSION
     # print( mo )
     version = mo.group(1)
@@ -273,6 +273,7 @@ def analyse_projects_data():
         page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
 
         page_projects = add_project_info( session, projects, page )
+        print('P', end='')
         # print( page_projects )
 
     # step1 archive the already collected info
