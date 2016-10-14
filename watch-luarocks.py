@@ -11,15 +11,20 @@ DBDICT_FNAME='dbdict.txt'
 dbdict = None
 DBDICT_INIT_VAL = {}
 NET_SLEEP=None
-MAX_PAGES=None
+END_PAGE=None
+START_PAGE=None
 
 def init_net_sleep(v):
     global NET_SLEEP
     NET_SLEEP=v
 
-def set_max_pages( v ):
-    global MAX_PAGES
-    MAX_PAGES=v
+def set_start_page( v ):
+    global START_PAGE
+    START_PAGE=v
+
+def set_end_page( v ):
+    global END_PAGE
+    END_PAGE=v
 
 def net_sleep():
     if NET_SLEEP:
@@ -215,11 +220,11 @@ def select_high_version( v1, v2):
     else:
         return max(v2, v1)
 
-def add_project_info( session, projects, page ):
+def add_project_info( session, projects, page, pnb ):
     soup = BeautifulSoup( page, "html.parser" )
     all_code = soup.find_all("div", "code-list-item")
     for code_item in all_code:
-        six.print_('.', end='')
+        six.print_('.', end='', flush=True)
         # enc_print( 'code_item', str(code_item ) )
         proj_auth_name = code_item.p.a.string
 
@@ -251,9 +256,10 @@ def add_project_info( session, projects, page ):
         d['luau_version'] = select_high_version( luau_version, d.get('luau_version', 'No version') )
         d['luau_full_path'].append( proj_luau_fullpath )
         d['luau_rel_path'] .append( proj_luau_relpath )
+        d['luau_file_search_page'].append( pnb )
         # enc_print( 'prof_info', str(d) )
 
-def extract_maxpage( page ):
+def extract_endpage( page ):
     soup = BeautifulSoup( page, "html.parser" )
     next_page = soup.find("a", "next_page")
     maxp = next_page.previous_sibling.previous_sibling.string
@@ -266,36 +272,20 @@ def analyse_projects_data():
     projects = {}
 
     page = gh_data_fetch_and_archive_have_luaunit_file(session)
-    maxpage = extract_maxpage( page )
-    if MAX_PAGES:
-        maxpage = min(MAX_PAGES, maxpage)
+    startpage = 1
+    endpage = extract_endpage( page )
+    if START_PAGE:
+        startpage = max(START_PAGE, startpage)
+    if END_PAGE:
+        endpage = min(END_PAGE, endpage)
 
-    for pnb in range(1, maxpage+1):
+    print('scanning github...')
+    for pnb in range(startpage, endpage+1):
+        six.print_('P%d' % pnb, end='', flush=True)
         page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
 
-        page_projects = add_project_info( session, projects, page )
-        six.print_('P', end='')
+        page_projects = add_project_info( session, projects, page, pnb )
         # print( page_projects )
-
-    # step1 archive the already collected info
-    f = open('projects.csv', 'wb')
-    fields = ( 'name', 'author', 'proj_path', 'luau_version', 'luau_rel_path', 'luau_full_path')
-    f.write( b';'.join( s.encode('cp1252', 'replace') for s in fields ) )
-    f.write(b'\n')
-    for proj_info in sorted( projects.keys() ):
-        for k in fields:
-            v = projects[proj_info][k]
-            if type(v) == six.text_type:
-                f.write( v.encode('cp1252', 'replace') )
-            elif type(v) == type([]):
-                f.write( b'"' )
-                for vv in v:
-                    f.write( str(vv).encode('cp1252', 'replace') )
-                    f.write( b' ' )
-                f.write( b'"' )
-            f.write(b';')
-        f.write(b'\n')
-    f.close()
 
     all_versions_and_proj = [ (p['luau_version'], p['proj_path']) for p in projects.values()]
     all_versions = set( v for (v,p) in all_versions_and_proj )
@@ -303,6 +293,32 @@ def analyse_projects_data():
 
     today = datetime.date.today().isoformat()
     update_db_list( GH_LUAU_VERSIONS, (today, nbproj_with_version ) )
+    save_db_dict()
+
+    # step1 archive the already collected info
+    f = open('projects.csv', 'wb')
+    fields = ( 'name', 'author', 'proj_path', 'luau_file_search_page', 'luau_version', 'luau_rel_path', 'luau_full_path')
+    f.write( b';'.join( s.encode('cp1252', 'replace') for s in fields ) )
+    f.write(b'\n')
+    try:
+        for proj_info in sorted( projects.keys() ):
+            for k in fields:
+                v = projects[proj_info][k]
+                if type(v) == six.text_type:
+                    f.write( six.u(v).encode('cp1252', 'replace') )
+                elif type(v) == type([]):
+                    f.write( b'"' )
+                    for vv in v:
+                        f.write( six.u(vv).encode('cp1252', 'replace') )
+                        f.write( b' ' )
+                    f.write( b'"' )
+                f.write(b';')
+            f.write(b'\n')
+    except:
+        six.print_('Error when handling field %s from project %s of page' % (six.u(k), six.u(proj_info), projects[proj_info]['luau_file_search_page'] ) )
+        raise
+    finally:
+        f.close()
 
 
 
@@ -373,7 +389,8 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument( '--net-sleep' )
-    parser.add_argument( '--pages' )
+    parser.add_argument( '--start-page' )
+    parser.add_argument( '--end-page' )
     parser.add_argument( '--print-db', action='store_true' )
     parser.add_argument( 'actions', nargs='*', help=HELP_ACTIONS )
     result = parser.parse_args()
@@ -391,9 +408,13 @@ if __name__ == '__main__':
         print('Network sleep: %d' % int(result.net_sleep) )
         init_net_sleep( int(result.net_sleep) )
 
-    if result.pages:
-        print('Max pages: %d' % int(result.pages) )
-        set_max_pages( int( result.pages ) )
+    if result.start_page:
+        print('Start page: %d' % int(result.start_page) )
+        set_start_page( int( result.start_page ) )
+
+    if result.end_page:
+        print('End page: %d' % int(result.end_page) )
+        set_end_page( int( result.end_page ) )
 
     # git_pull()
     init_db_dict()
