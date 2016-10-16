@@ -43,10 +43,10 @@ def sanitize_quotes( s ):
     return s
 
 def remove_duplicates( nb_val ):
-    '''Data is formatted as (isodate, nb of something)
+    '''Data is formatted as list of (isodate, nb of something)
     In case of duplicates, keep only the latest value
     '''
-    nb_val.sort()
+    nb_val.sort(reverse=True)
     new_nb_val = functools.reduce( lambda li, e: li + [e] if len(li) == 0 or li[-1][0] != e[0] else li, nb_val, [] )
     if len(new_nb_val) != len(nb_val):
         print( 'Removed %d duplicates' % (len(nb_val) - len(new_nb_val)))
@@ -256,7 +256,7 @@ def add_project_info( session, projects, page, pnb ):
         d['luau_version'] = select_high_version( luau_version, d.get('luau_version', 'No version') )
         d['luau_full_path'].append( proj_luau_fullpath )
         d['luau_rel_path'] .append( proj_luau_relpath )
-        d['luau_file_search_page'].append( pnb )
+        d['luau_file_search_page'].append( six.u('%s' % pnb) )
         # enc_print( 'prof_info', str(d) )
 
 def extract_endpage( page ):
@@ -279,7 +279,7 @@ def analyse_projects_data():
     if END_PAGE:
         endpage = min(END_PAGE, endpage)
 
-    print('scanning github...')
+    print('Scanning github...')
     for pnb in range(startpage, endpage+1):
         six.print_('P%d' % pnb, end='', flush=True)
         page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
@@ -290,6 +290,7 @@ def analyse_projects_data():
     all_versions_and_proj = [ (p['luau_version'], p['proj_path']) for p in projects.values()]
     all_versions = set( v for (v,p) in all_versions_and_proj )
     nbproj_with_version = [ (targetv, len( list( filter( lambda vp: vp[0] == targetv, all_versions_and_proj) ) ) )  for targetv in all_versions ]
+    nbproj_with_version.sort()
 
     today = datetime.date.today().isoformat()
     update_db_list( GH_LUAU_VERSIONS, (today, nbproj_with_version ) )
@@ -305,22 +306,22 @@ def analyse_projects_data():
             for k in fields:
                 v = projects[proj_info][k]
                 if type(v) == six.text_type:
-                    f.write( six.u(v).encode('cp1252', 'replace') )
+                    f.write( v.encode('cp1252', 'replace') )
                 elif type(v) == type([]):
                     f.write( b'"' )
                     for vv in v:
-                        f.write( six.u(vv).encode('cp1252', 'replace') )
+                        f.write( vv.encode('cp1252', 'replace') )
                         f.write( b' ' )
                     f.write( b'"' )
                 f.write(b';')
             f.write(b'\n')
     except:
-        six.print_('Error when handling field %s from project %s of page' % (six.u(k), six.u(proj_info), projects[proj_info]['luau_file_search_page'] ) )
+        six.print_('Error when handling field %s' % (six.b(k)) )
+        six.print_('from project %s' % (six.b(projects[proj_info]['proj_path']) ))
+        six.print_('of page %s' % (six.b(projects[proj_info]['luau_file_search_page'] ) ) )
         raise
     finally:
         f.close()
-
-
 
 def watch_gh_metadata():
     if not HAS_GH_API:
