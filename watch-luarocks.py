@@ -13,6 +13,7 @@ DBDICT_INIT_VAL = {}
 NET_SLEEP=None
 END_PAGE=None
 START_PAGE=None
+NONET=False
 
 def init_net_sleep(v):
     global NET_SLEEP
@@ -25,6 +26,10 @@ def set_start_page( v ):
 def set_end_page( v ):
     global END_PAGE
     END_PAGE=v
+
+def set_nonet( v ):
+    global NONET
+    NONET=v
 
 def net_sleep():
     if NET_SLEEP:
@@ -90,6 +95,8 @@ def luarocks_fetch_nb_dl_and_archive():
     # print(dbdict)
 
 def watch_luarocks():
+    if NONET:
+        raise ConnectionError('can not watch luarocks without network')
     luarocks_fetch_nb_dl_and_archive()
     save_db_dict()
 
@@ -118,27 +125,38 @@ def get_gh_user_pwd():
         pwd  = open(path).read().strip()
     except IOError:
         print('Could not read file %s' % path)
-        raise ValueError("GH_USER and GH_PWD must be set for this action.")
+        raise Exception("GH_USER and GH_PWD must be set for this action.")
     return user, pwd
 
 def gh_data_fetch_and_archive_have_luaunit_file(session, page=None):
+    if NONET:
+        page = open('gh_have_luaunit_file.txt', 'rb').read().decode( 'utf8')
+        return page
+
     pageref='&p=%d' % page if page else ''
     net_sleep()
     r = session.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults' + pageref)
-    open('gh_login3.txt', 'wb').write( r.text.encode('utf8') )
+    open('gh_have_luaunit_file.txt', 'wb').write( r.text.encode('utf8') )
     return r.text
 
 def gh_data_fetch_and_archive_ref_luaunit_code(session, page=None):
+    if NONET:
+        page = open('gh_ref_luaunit_code.txt', 'rb').read().decode( 'utf8')
+        return page
+
     pageref='&p=%d' % page if page else ''
     net_sleep()
     r = session.get('https://github.com/search?utf8=%E2%9C%93&q=luaunit.lua&type=Code&ref=searchresults' + pageref)
-    open('gh_login4.txt', 'wb').write( r.text.encode('utf8') )
+    open('gh_ref_luaunit_code.txt', 'wb').write( r.text.encode('utf8') )
     return r.text
 
 def enc_print( info, t ):
-    print( '%s=' % info, t.encode('cp1252', 'replace') )
+    for l in  ( '%s=%s' % (info,t) ).split('\n'):
+        six.print_( l.encode('cp1252', 'replace') )
 
 def gh_login():
+    if NONET:
+        return 'no network, no session', True
     s = requests.Session()
 
     # open login page
@@ -190,7 +208,10 @@ def fname_is_luaunit( fpath ):
 
 reVersion = re.compile('Version:\s+(\d+\.\d+)')
 def get_luaunit_version( session, proj_luau_fullpath ):
-    '''Return None if not a luaunit official file. Return version string else'''
+    '''Fetch luaunit file and analyse version of the file.
+    Return None if not a luaunit official file. Return version string else'''
+    if NONET:
+        raise ConnectionError('Can not analyse version of file without network') 
     raw_luaunit_url = proj_luau_fullpath.replace('blob', 'raw')
     net_sleep()
     r = session.get(proj_luau_fullpath)
@@ -220,27 +241,32 @@ def select_high_version( v1, v2):
     else:
         return max(v2, v1)
 
-def add_project_info( session, projects, page, pnb ):
+def extend_project_info( session, projects, page, pnb ):
     soup = BeautifulSoup( page, "html.parser" )
     all_code = soup.find_all("div", "code-list-item")
     for code_item in all_code:
         six.print_('.', end='', flush=True)
         # enc_print( 'code_item', str(code_item ) )
-        proj_auth_name = code_item.p.a.string
-
-        # print( proj_auth_name )
+        proj_auth_name = code_item.div.div.a.string
+        # enc_print( 'proj_auth_name',  proj_auth_name )
         proj_auth, proj_name = proj_auth_name.split('/')
-        # print( code_item.p.next_sibling.next_sibling )
-        path_item = code_item.p.next_sibling.next_sibling.a
-        proj_luau_relpath = ''.join( path_item.strings ) 
+        path_item = code_item.div.div.a.next_sibling.next_sibling
+        # enc_print( 'path_item', path_item )
+        proj_luau_relpath =  path_item['title']
         proj_luau_fullpath = 'https://github.com/' + path_item['href']
+        # enc_print( 'proj_luau_fullpath', proj_luau_fullpath )
+        # enc_print( 'proj_luau_relpath', proj_luau_relpath )
 
         if not fname_is_luaunit( proj_luau_relpath ): 
             continue
 
-        luau_version = get_luaunit_version( session, proj_luau_fullpath )
-        if not luau_version:
-            continue
+        if NONET:
+            luau_version = NO_VERSION
+        else:
+            luau_version = get_luaunit_version( session, proj_luau_fullpath )
+            if not luau_version:
+                continue
+
 
         if proj_auth_name in projects:
             d = projects[ proj_auth_name ]
@@ -265,7 +291,15 @@ def extract_endpage( page ):
     maxp = next_page.previous_sibling.previous_sibling.string
     return int(maxp)
 
-def analyse_projects_data():
+def enrich_project_data( session, project, extra_request):
+    '''Add extra project info such as nb of stars and forks, travis-ci integration, ...
+    Be aware that this requires extra network calls.
+
+    extra_request: list of extra items to fetch. Accepted values: 'stars', 'followers'.
+    '''
+    pass
+
+def analyse_projects_data( extra_request=[] ):
     session, success = gh_login()
     if not success:
         return
@@ -284,8 +318,10 @@ def analyse_projects_data():
         six.print_('P%d' % pnb, end='', flush=True)
         page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
 
-        page_projects = add_project_info( session, projects, page, pnb )
+        page_projects = extend_project_info( session, projects, page, pnb )
         # print( page_projects )
+
+        enrich_project_data( session, projects, extra_request )
 
     all_versions_and_proj = [ (p['luau_version'], p['proj_path']) for p in projects.values()]
     all_versions = set( v for (v,p) in all_versions_and_proj )
@@ -324,6 +360,8 @@ def analyse_projects_data():
         f.close()
 
 def watch_gh_metadata():
+    if NONET:
+        raise ConnectionError('Can not watch gh metadata without network') 
     if not HAS_GH_API:
         print("GitHub API not available...")
         sys.exit(1)
@@ -360,15 +398,15 @@ def save_db_dict():
     f.close()
 
 def git_pull():
+    if NONET:
+        raise ConnectionError("Can not process git pull in no-network mode")
     subprocess.call(['git', 'pull', '--quiet'])
 
 def git_commit_and_push():
+    if NONET:
+        raise ConnectionError("Can not process git push in no-network mode")
     subprocess.call(['git', 'commit', '--quiet', '-m', 'DB update', 'dbdict.txt'])
     subprocess.call(['git', 'push', '--quiet'])
-
-def github_db_commit_push():
-    git_commit_and_push()
-
 
 
 ################################################################################333
@@ -390,6 +428,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument( '--net-sleep' )
+    parser.add_argument( '--no-network', action='store_true' )
     parser.add_argument( '--start-page' )
     parser.add_argument( '--end-page' )
     parser.add_argument( '--print-db', action='store_true' )
@@ -405,19 +444,27 @@ if __name__ == '__main__':
         print('Unrecognised action: ', ' '.join(not_recognised))
         sys.exit(1)
 
-    if result.net_sleep:
-        print('Network sleep: %d' % int(result.net_sleep) )
-        init_net_sleep( int(result.net_sleep) )
+    if result.no_network:
+        print('Work locally on last downloaded files')
+        set_nonet( True )
+        set_start_page( 1 )
+        set_end_page( 1 )
 
-    if result.start_page:
-        print('Start page: %d' % int(result.start_page) )
-        set_start_page( int( result.start_page ) )
+    else:
 
-    if result.end_page:
-        print('End page: %d' % int(result.end_page) )
-        set_end_page( int( result.end_page ) )
+        if result.net_sleep:
+            print('Network sleep: %d' % int(result.net_sleep) )
+            init_net_sleep( int(result.net_sleep) )
 
-    # git_pull()
+        if result.start_page:
+            print('Start page: %d' % int(result.start_page) )
+            set_start_page( int( result.start_page ) )
+
+        if result.end_page:
+            print('End page: %d' % int(result.end_page) )
+            set_end_page( int( result.end_page ) )
+
+        # git_pull()
     init_db_dict()
 
     for action in result.actions:
