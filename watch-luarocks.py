@@ -251,6 +251,7 @@ def select_high_version( v1, v2):
 def extend_project_info( session, projects, page, pnb ):
     soup = BeautifulSoup( page, "html.parser" )
     all_code = soup.find_all("div", "code-list-item")
+    added_projects = {}
     for code_item in all_code:
         six.print_('.', end='', flush=True)
         # enc_print( 'code_item', str(code_item ) )
@@ -273,8 +274,6 @@ def extend_project_info( session, projects, page, pnb ):
             luau_version = get_luaunit_version( session, proj_luau_fullpath )
             if not luau_version:
                 continue
-
-
         if proj_auth_name in projects:
             d = projects[ proj_auth_name ]
             assert( d['name'] == proj_name )
@@ -286,25 +285,30 @@ def extend_project_info( session, projects, page, pnb ):
             d['author'] = proj_auth
             d['proj_path'] = 'https://github.com/' + proj_auth_name
 
+        added_projects[proj_auth_name] = d
+
         d['luau_version'] = select_high_version( luau_version, d.get('luau_version', 'No version') )
         d['luau_full_path'].append( proj_luau_fullpath )
         d['luau_rel_path'] .append( proj_luau_relpath )
         d['luau_file_search_page'].append( six.u('%s' % pnb) )
-        # enc_print( 'prof_info', str(d) )
+
+        # add extra github data about project
+        repo = gh_api().get_repo( proj_auth_name )
+        extra_data = {
+            'forks' : repo.forks_count,
+            'stars' : repo.stargazers_count,
+            'watchers' : repo.watchers_count,
+        }
+        # enc_print( 'extra_data', extra_data )
+        d.update( extra_data )
+
+    return added_projects
 
 def extract_endpage( page ):
     soup = BeautifulSoup( page, "html.parser" )
     next_page = soup.find("a", "next_page")
     maxp = next_page.previous_sibling.previous_sibling.string
     return int(maxp)
-
-def enrich_project_data( session, project, extra_request):
-    '''Add extra project info such as nb of stars and forks, travis-ci integration, ...
-    Be aware that this requires extra network calls.
-
-    extra_request: list of extra items to fetch. Accepted values: 'stars', 'followers'.
-    '''
-    pass
 
 def analyse_projects_data( extra_request=[] ):
     session, success = gh_login()
@@ -328,8 +332,6 @@ def analyse_projects_data( extra_request=[] ):
         page_projects = extend_project_info( session, projects, page, pnb )
         # print( page_projects )
 
-        enrich_project_data( session, projects, extra_request )
-
     all_versions_and_proj = [ (p['luau_version'], p['proj_path']) for p in projects.values()]
     all_versions = set( v for (v,p) in all_versions_and_proj )
     nbproj_with_version = [ (targetv, len( list( filter( lambda vp: vp[0] == targetv, all_versions_and_proj) ) ) )  for targetv in all_versions ]
@@ -341,14 +343,16 @@ def analyse_projects_data( extra_request=[] ):
 
     # step1 archive the already collected info
     f = open('projects.csv', 'wb')
-    fields = ( 'name', 'author', 'proj_path', 'luau_file_search_page', 'luau_version', 'luau_rel_path', 'luau_full_path')
+    fields = ( 'name', 'author', 'proj_path', 'luau_file_search_page', 'luau_version', 'stars', 'watchers', 'forks', 'luau_rel_path', 'luau_full_path')
     f.write( b';'.join( s.encode('cp1252', 'replace') for s in fields ) )
     f.write(b'\n')
     try:
         for proj_info in sorted( projects.keys() ):
             for k in fields:
                 v = projects[proj_info][k]
-                if type(v) == six.text_type:
+                if type(v) in six.integer_types:
+                    f.write( b'%d' % v )
+                elif type(v) == six.text_type:
                     f.write( v.encode('cp1252', 'replace') )
                 elif type(v) == type([]):
                     f.write( b'"' )
@@ -356,6 +360,8 @@ def analyse_projects_data( extra_request=[] ):
                         f.write( vv.encode('cp1252', 'replace') )
                         f.write( b' ' )
                     f.write( b'"' )
+                else:
+                    print( 'Unknown type: %s' % type(v) )
                 f.write(b';')
             f.write(b'\n')
     except:
@@ -366,20 +372,27 @@ def analyse_projects_data( extra_request=[] ):
     finally:
         f.close()
 
-def watch_gh_metadata():
-    if NONET:
-        raise ConnectionError('Can not watch gh metadata without network') 
+def gh_api():
     if not HAS_GH_API:
         print("GitHub API not available...")
         sys.exit(1)
-    g = Github( *get_gh_user_pwd() )
-    lu_repo = g.get_repo('bluebird75/luaunit')
+
+    # static var stored as function attribute
+    if not hasattr(gh_api, 'session'):
+        gh_api.session = Github( *get_gh_user_pwd() )
+    return gh_api.session
+
+def watch_gh_metadata():
+    if NONET:
+        raise ConnectionError('Can not watch gh metadata without network') 
+    lu_repo = gh_api().get_repo('bluebird75/luaunit')
     lu_repo_metadata = {
         'forks_count'       : lu_repo.forks_count,
         'stargazers_count'  : lu_repo.stargazers_count,
         'watchers_count'    : lu_repo.watchers_count,
     }
     today = datetime.date.today().isoformat()
+    print( lu_repo_metadata )
     update_db_list( GH_METADATA, (today, lu_repo_metadata ) )
 
 ################################################################################333
