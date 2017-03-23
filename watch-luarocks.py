@@ -157,10 +157,14 @@ def enc_print( info, t ):
 def gh_login():
     if NONET:
         return 'no network, no session', True
-    s = requests.Session()
+    if hasattr(gh_login, 'session'):
+        print('Reusing login session')
+        return gh_login.session        
+
+    session = requests.Session()
 
     # open login page
-    r = s.get( 'https://github.com/login' )
+    r = session.get( 'https://github.com/login' )
     open('gh_login1.txt', 'wb').write( r.text.encode('utf8' ) )
 
     # perform login
@@ -172,16 +176,19 @@ def gh_login():
     user, pwd = get_gh_user_pwd()
     payload = { 'authenticity_token': input_auth_token, 'utf8' : input_utf8, 'login': user, 'password' : pwd,   }
     # print(str(payload).encode('cp1252', 'replace'))
-    r = s.post( 'https://github.com/session', data=payload  )
+    r = session.post( 'https://github.com/session', data=payload  )
     open('gh_login2.txt', 'wb').write( r.text.encode('utf8') )
 
     # validate login
     soup = BeautifulSoup( r.text, "html.parser" )
     if soup.get_text().find('Incorrect username or password') != -1:
         print('Login failed! user="%s" pwd="%s"' % (GH_USER, GH_PWD) )
-        return s, False
+        return session, False
 
-    return s, True
+    # store session for later re-use
+    gh_login.session = session
+
+    return session, True
 
 def count_results( data ):
     soup = BeautifulSoup( data, "html.parser" )
