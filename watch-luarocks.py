@@ -255,10 +255,10 @@ def extend_project_info( session, projects, page, pnb ):
     for code_item in all_code:
         six.print_('.', end='', flush=True)
         # enc_print( 'code_item', str(code_item ) )
-        proj_auth_name = code_item.div.div.a.string
+        proj_auth_name = code_item.div.a.string
         # enc_print( 'proj_auth_name',  proj_auth_name )
         proj_auth, proj_name = proj_auth_name.split('/')
-        path_item = code_item.div.div.a.next_sibling.next_sibling
+        path_item = code_item.div.a.next_sibling.next_sibling
         # enc_print( 'path_item', path_item )
         proj_luau_relpath =  path_item['title']
         proj_luau_fullpath = 'https://github.com/' + path_item['href']
