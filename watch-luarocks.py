@@ -192,7 +192,7 @@ def gh_login():
 
 def count_results( data ):
     soup = BeautifulSoup( data, "html.parser" )
-    e = soup.find_all("div", "sort-bar")[0]
+    e = soup.find_all("div", "d-flex flex-justify-between border-bottom pb-3")[0]
     s = e.h3.string
     nb = extract_digit( s )
     return nb
