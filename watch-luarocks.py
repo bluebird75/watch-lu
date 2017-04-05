@@ -248,7 +248,7 @@ def select_high_version( v1, v2):
     else:
         return max(v2, v1)
 
-def extend_project_info( session, projects, page, pnb ):
+def extend_project_info( session, projects, page, pnb, have_luaunit ):
     soup = BeautifulSoup( page, "html.parser" )
     all_code = soup.find_all("div", "code-list-item")
     added_projects = {}
@@ -260,20 +260,33 @@ def extend_project_info( session, projects, page, pnb ):
         proj_auth, proj_name = proj_auth_name.split('/')
         path_item = code_item.div.a.next_sibling.next_sibling
         # enc_print( 'path_item', path_item )
-        proj_luau_relpath =  path_item['title']
-        proj_luau_fullpath = 'https://github.com/' + path_item['href']
-        # enc_print( 'proj_luau_fullpath', proj_luau_fullpath )
-        # enc_print( 'proj_luau_relpath', proj_luau_relpath )
 
-        if not fname_is_luaunit( proj_luau_relpath ): 
-            continue
+        if have_luaunit:
+            # we have a reference to luaunit file
+            proj_luau_relpath =  path_item['title']
+            proj_luau_fullpath = 'https://github.com/' + path_item['href']
+            # enc_print( 'proj_luau_fullpath', proj_luau_fullpath )
+            # enc_print( 'proj_luau_relpath', proj_luau_relpath )
+            proj_ref_luau_relpath =  ''
+            proj_ref_luau_fullpath = ''
 
-        if NONET:
-            luau_version = NO_VERSION
-        else:
-            luau_version = get_luaunit_version( session, proj_luau_fullpath )
-            if not luau_version:
+            if not fname_is_luaunit( proj_luau_relpath ): 
                 continue
+
+            if NONET:
+                luau_version = NO_VERSION
+            else:
+                luau_version = get_luaunit_version( session, proj_luau_fullpath )
+                if not luau_version:
+                    continue
+        else:
+            # we have a reference to a file which requires luaunit
+            proj_ref_luau_relpath =  path_item['title']
+            proj_ref_luau_fullpath = 'https://github.com/' + path_item['href']
+            proj_luau_relpath =  ''
+            proj_luau_fullpath = ''
+            luau_version = NO_VERSION
+
         if proj_auth_name in projects:
             d = projects[ proj_auth_name ]
             assert( d['name'] == proj_name )
@@ -290,6 +303,8 @@ def extend_project_info( session, projects, page, pnb ):
         d['luau_version'] = select_high_version( luau_version, d.get('luau_version', 'No version') )
         d['luau_full_path'].append( proj_luau_fullpath )
         d['luau_rel_path'] .append( proj_luau_relpath )
+        d['luau_ref_full_path'].append( proj_ref_luau_fullpath )
+        d['luau_ref_rel_path'] .append( proj_ref_luau_relpath )
         d['luau_file_search_page'].append( six.u('%s' % pnb) )
 
         # add extra github data about project
@@ -310,13 +325,20 @@ def extract_endpage( page ):
     maxp = next_page.previous_sibling.previous_sibling.string
     return int(maxp)
 
-def analyse_projects_data( extra_request=[] ):
+
+def analyse_projects_data_without_luaunit():
+    return analyse_projects_data( False )
+
+def analyse_projects_data( have_luaunit=True ):
     session, success = gh_login()
     if not success:
         return
     projects = {}
 
-    page = gh_data_fetch_and_archive_have_luaunit_file(session)
+    if have_luaunit:
+        page = gh_data_fetch_and_archive_have_luaunit_file(session)
+    else:
+        page = gh_data_fetch_and_archive_ref_luaunit_code(session)
     startpage = 1
     endpage = extract_endpage( page )
     if START_PAGE:
@@ -327,9 +349,12 @@ def analyse_projects_data( extra_request=[] ):
     print('Scanning github...')
     for pnb in range(startpage, endpage+1):
         six.print_('P%d' % pnb, end='', flush=True)
-        page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
+        if have_luaunit:
+            page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
+        else:
+            page = gh_data_fetch_and_archive_ref_luaunit_code(session, pnb)
 
-        page_projects = extend_project_info( session, projects, page, pnb )
+        page_projects = extend_project_info( session, projects, page, pnb, have_luaunit )
         # print( page_projects )
 
     all_versions_and_proj = [ (p['luau_version'], p['proj_path']) for p in projects.values()]
@@ -342,8 +367,15 @@ def analyse_projects_data( extra_request=[] ):
     save_db_dict()
 
     # step1 archive the already collected info
-    f = open('projects.csv', 'wb')
-    fields = ( 'name', 'author', 'proj_path', 'luau_file_search_page', 'luau_version', 'stars', 'watchers', 'forks', 'luau_rel_path', 'luau_full_path')
+    if have_luaunit:
+        fname = 'projects-have-luaunit.csv'
+    else:
+        fname = 'projects-ref-luaunit.csv'
+
+    f = open( fname, 'wb')
+    fields = ( 'name', 'author', 'proj_path', 'luau_file_search_page', 
+               'luau_version', 'stars', 'watchers', 'forks', 'luau_rel_path', 'luau_ref_rel_path', 
+               'luau_full_path', 'luau_ref_full_path')
     f.write( b';'.join( s.encode('cp1252', 'replace') for s in fields ) )
     f.write(b'\n')
     try:
@@ -440,6 +472,7 @@ ACTIONS = {
     'watch_gh_metadata':  watch_gh_metadata,
     'gh_push': git_commit_and_push,
     'analyse_projects_data': analyse_projects_data,
+    'analyse_projects_data_without_luaunit': analyse_projects_data_without_luaunit,
 }
 HELP_ACTIONS = 'Possible ACTIONS: %s' % ', '.join(ACTIONS.keys())
 
