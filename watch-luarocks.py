@@ -351,7 +351,7 @@ def analyse_projects_data( extra_request=[] ):
             for k in fields:
                 v = projects[proj_info][k]
                 if type(v) in six.integer_types:
-                    f.write( b'%d' % v )
+                    f.write( bytes(v) )
                 elif type(v) == six.text_type:
                     f.write( v.encode('cp1252', 'replace') )
                 elif type(v) == type([]):
