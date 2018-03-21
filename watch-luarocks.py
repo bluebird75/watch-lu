@@ -406,7 +406,7 @@ def analyse_projects_data( have_luaunit=True ):
 
 def gh_api():
     if not HAS_GH_API:
-        print("GitHub API not available...")
+        print("Python package for GitHub API not available...")
         sys.exit(1)
 
     # static var stored as function attribute
