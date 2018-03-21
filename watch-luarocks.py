@@ -73,7 +73,7 @@ def update_db_list( key, data ):
 
 # LuaRocks config
 LUAROCKS_PROJECT='http://luarocks.org/modules/bluebird75/luaunit'
-NB_DL_LUAROCKS='NB_DL_LUAROCKS'
+NB_DL_LUAROCKS_TOTAL='NB_DL_LUAROCKS_TOTAL'
 
 def luarocks_fetch_nb_dl():
     net_sleep()
@@ -91,7 +91,7 @@ def luarocks_fetch_nb_dl_and_archive():
     "Fetch nb of download and archive in dbdict"
     today = datetime.date.today().isoformat()
     nb_dl = luarocks_fetch_nb_dl()
-    update_db_list( NB_DL_LUAROCKS, (today, nb_dl) )
+    update_db_list( NB_DL_LUAROCKS_TOTAL, (today, nb_dl) )
     # print(dbdict)
 
 def watch_luarocks():
