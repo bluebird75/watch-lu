@@ -74,6 +74,7 @@ def update_db_list( key, data ):
 # LuaRocks config
 LUAROCKS_PROJECT='http://luarocks.org/modules/bluebird75/luaunit'
 NB_DL_LUAROCKS_TOTAL='NB_DL_LUAROCKS_TOTAL'
+NB_DL_LUAROCKS_V33='NB_DL_LUAROCKS_V33'
 
 def luarocks_fetch_nb_dl():
     net_sleep()
@@ -85,13 +86,23 @@ def luarocks_fetch_nb_dl():
     # print( e )
     s = e.string
     nb_dl = extract_digit( s )
-    return nb_dl
+
+    e = soup.find_all(string='Versions' )[0]
+    e = e.parent.next_sibling
+    version_33_1 = e.a.text
+    if version_33_1 != '3.3-1':
+        raise ValueError('Could not find version 3.3 download info on luarocks')
+
+    nb_dl_v33 = extract_digit( e.span.next_sibling.text )
+
+    return nb_dl, nb_dl_v33
 
 def luarocks_fetch_nb_dl_and_archive():
     "Fetch nb of download and archive in dbdict"
     today = datetime.date.today().isoformat()
-    nb_dl = luarocks_fetch_nb_dl()
+    nb_dl, nb_dl_v33 = luarocks_fetch_nb_dl()
     update_db_list( NB_DL_LUAROCKS_TOTAL, (today, nb_dl) )
+    update_db_list( NB_DL_LUAROCKS_V33, (today, nb_dl_v33) )
     # print(dbdict)
 
 def watch_luarocks():
