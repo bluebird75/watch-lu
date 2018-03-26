@@ -14,6 +14,7 @@ NET_SLEEP=None
 END_PAGE=None
 START_PAGE=None
 NONET=False
+updated_data = []
 
 def init_net_sleep(v):
     global NET_SLEEP
@@ -66,6 +67,7 @@ def update_db_list( key, data ):
         dbdict[ key ] = list_val
     list_val.append( data )
     dbdict[ key ] = remove_duplicates( list_val )
+    updated_data.append( (key, data) )
 
 ################################################################################333
 #
@@ -535,6 +537,8 @@ if __name__ == '__main__':
         ACTIONS[action]()
 
     if result.print_db:
-        pprint.pprint( dbdict )
+        pprint.pprint( updated_data )
+        # pprint.pprint( dbdict )
     save_db_dict()
+
 
