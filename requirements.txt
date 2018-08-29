@@ -1,2 +1,4 @@
+six
 beautifulsoup4
 requests
+pygithub
