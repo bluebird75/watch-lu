@@ -169,7 +169,7 @@ def gh_data_fetch_and_archive_ref_luaunit_code(session, page=None):
     return r.text
 
 def enc_print( info, t ):
-    for l in  ( '%s=%s' % (info,t) ).split('\n'):
+    for l in  ( '\n%s=%s' % (info,t) ).split('\n'):
         six.print_( l.encode('cp1252', 'replace') )
 
 def gh_login():
@@ -278,10 +278,10 @@ def extend_project_info( session, projects, page, pnb, have_luaunit ):
     for code_item in all_code:
         six.print_('.', end='', flush=True)
         # enc_print( 'code_item', str(code_item ) )
-        proj_auth_name = code_item.div.a.string
+        proj_auth_name = code_item.div.div.a.string
         # enc_print( 'proj_auth_name',  proj_auth_name )
         proj_auth, proj_name = proj_auth_name.split('/')
-        path_item = code_item.div.a.next_sibling.next_sibling
+        path_item = code_item.div.div.a.next_sibling.next_sibling
         # enc_print( 'path_item', path_item )
 
         if have_luaunit:
