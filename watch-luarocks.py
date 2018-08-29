@@ -16,6 +16,11 @@ START_PAGE=None
 NONET=False
 updated_data = []
 
+class ParseError(Exception):
+    '''Raised when the format of the page has changed and is no longer parseable asis by watch-lu'''
+    pass
+
+
 def init_net_sleep(v):
     global NET_SLEEP
     NET_SLEEP=v
@@ -205,8 +210,13 @@ def gh_login():
 
 def count_results( data ):
     soup = BeautifulSoup( data, "html.parser" )
-    e = soup.find_all("div", "d-flex flex-justify-between border-bottom pb-3")[0]
+    el = soup.find_all("div", 'd-flex flex-column flex-md-row flex-justify-between border-bottom pb-3 position-relative' )
+    if len(el) < 1:
+        raise ParseError('Could not locate the number of results in the github page')
+    e = el[0]
     s = e.h3.string
+    if s == None:
+        s = e.h3.span.string
     nb = extract_digit( s )
     return nb
 
