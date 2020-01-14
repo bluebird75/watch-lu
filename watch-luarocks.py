@@ -84,6 +84,9 @@ NB_DL_LUAROCKS_TOTAL='NB_DL_LUAROCKS_TOTAL'
 NB_DL_LUAROCKS_V33='NB_DL_LUAROCKS_V33'
 
 def luarocks_fetch_nb_dl():
+    '''Connect to luarocks and retrieve the number of download of luaunit.
+    Return: (nb of dowloand of luaunit, nb of download of v3.3)
+    '''
     net_sleep()
     s = requests.get(LUAROCKS_PROJECT).text
     soup = BeautifulSoup( s, "html.parser" )
@@ -113,6 +116,7 @@ def luarocks_fetch_nb_dl_and_archive():
     # print(dbdict)
 
 def watch_luarocks():
+    '''Perform the full action on luarocks: retrieve the number of download and archive it'''
     if NONET:
         raise ConnectionError('can not watch luarocks without network')
     luarocks_fetch_nb_dl_and_archive()
@@ -135,6 +139,7 @@ GH_LUAU_VERSIONS         = 'GH_LUAU_VERSIONS'
 NO_VERSION               = 'No version'
 
 def get_gh_user_pwd():
+    '''Return the locally stored user and password values'''
     home = os.getenv('HOME')
     try:
         path = '%s/.ssh/GH_USER' % home
@@ -147,6 +152,8 @@ def get_gh_user_pwd():
     return user, pwd
 
 def gh_data_fetch_and_archive_have_luaunit_file(session, page=None):
+    '''Retrieve the result page about project containing a luaunit.lua file and return the text content
+    '''
     if NONET:
         page = open('gh_have_luaunit_file.txt', 'rb').read().decode( 'utf8')
         return page
@@ -158,6 +165,8 @@ def gh_data_fetch_and_archive_have_luaunit_file(session, page=None):
     return r.text
 
 def gh_data_fetch_and_archive_ref_luaunit_code(session, page=None):
+    '''Retrieve the result page about project referencing luaunit.lua and return the text content
+    '''
     if NONET:
         page = open('gh_ref_luaunit_code.txt', 'rb').read().decode( 'utf8')
         return page
@@ -173,6 +182,7 @@ def enc_print( info, t ):
         six.print_( l.encode('cp1252', 'replace') )
 
 def gh_login():
+    '''Login to github and create a session'''
     if NONET:
         return 'no network, no session', True
     if hasattr(gh_login, 'session'):
@@ -209,6 +219,7 @@ def gh_login():
     return session, True
 
 def count_results( data ):
+    '''Count the number of results of a github search page result'''
     soup = BeautifulSoup( data, "html.parser" )
     el = soup.find_all("div", 'd-flex flex-column flex-md-row flex-justify-between border-bottom pb-3 position-relative' )
     if len(el) < 1:
@@ -221,6 +232,7 @@ def count_results( data ):
     return nb
 
 def watch_gh_data():
+    '''Retrieve data from github about number of use of luaunit.lua and store into db'''
     session, success = gh_login()
     if not success:
         return
@@ -236,7 +248,7 @@ def fname_is_luaunit( fpath ):
     fname = fpath.split('/')[-1]
     return fname.lower() == 'luaunit.lua'
 
-reVersion = re.compile('Version:\s+(\d+\.\d+)')
+reVersion = re.compile(r'Version:\s+(\d+\.\d+)')
 def get_luaunit_version( session, proj_luau_fullpath ):
     '''Fetch luaunit file and analyse version of the file.
     Return None if not a luaunit official file. Return version string else'''
@@ -353,6 +365,12 @@ def analyse_projects_data_without_luaunit():
     return analyse_projects_data( False )
 
 def analyse_projects_data( have_luaunit=True ):
+    '''Analyse content of all project using a lusunit.lua file or referencing such a file.
+    have_luaunit: default to True, for projects who actually contain the luaunit.lua file
+                  False: project is only referencing luaunit.lua , no version analysis possible.
+
+    Archive the results in the DB file
+    '''
     session, success = gh_login()
     if not success:
         return
@@ -389,7 +407,7 @@ def analyse_projects_data( have_luaunit=True ):
     update_db_list( GH_LUAU_VERSIONS, (today, nbproj_with_version ) )
     save_db_dict()
 
-    # step1 archive the already collected info
+    # archive the already collected info into a CSV
     if have_luaunit:
         fname = 'projects-have-luaunit.csv'
     else:
@@ -428,6 +446,7 @@ def analyse_projects_data( have_luaunit=True ):
         f.close()
 
 def gh_api():
+    '''Create a github session and return it'''
     if not HAS_GH_API:
         print("Python package for GitHub API not available...")
         sys.exit(1)
@@ -438,6 +457,7 @@ def gh_api():
     return gh_api.session
 
 def watch_gh_metadata():
+    '''Collect information about GitHub luaunit project and update DB'''
     if NONET:
         raise ConnectionError('Can not watch gh metadata without network') 
     lu_repo = gh_api().get_repo('bluebird75/luaunit')
