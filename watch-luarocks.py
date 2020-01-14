@@ -290,18 +290,18 @@ def extend_project_info( session, projects, page, pnb, have_luaunit ):
     for code_item in all_code:
         six.print_('.', end='', flush=True)
         # enc_print( 'code_item', str(code_item ) )
-        proj_auth_name = code_item.div.div.a.string
+        proj_auth_name = code_item.div.div.a.string.strip()
         # enc_print( 'proj_auth_name',  proj_auth_name )
         proj_auth, proj_name = proj_auth_name.split('/')
-        path_item = code_item.div.div.a.next_sibling.next_sibling
+        path_item = code_item.div.div.next_sibling.next_sibling.a
         # enc_print( 'path_item', path_item )
 
         if have_luaunit:
             # we have a reference to luaunit file
             proj_luau_relpath =  path_item['title']
             proj_luau_fullpath = 'https://github.com/' + path_item['href']
-            # enc_print( 'proj_luau_fullpath', proj_luau_fullpath )
             # enc_print( 'proj_luau_relpath', proj_luau_relpath )
+            # enc_print( 'proj_luau_fullpath', proj_luau_fullpath )
             proj_ref_luau_relpath =  ''
             proj_ref_luau_fullpath = ''
 
