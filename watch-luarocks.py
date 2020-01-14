@@ -179,7 +179,8 @@ def gh_data_fetch_and_archive_ref_luaunit_code(session, page=None):
 
 def enc_print( info, t ):
     for l in  ( '\n%s=%s' % (info,t) ).split('\n'):
-        six.print_( l.encode('cp1252', 'replace') )
+        # six.print_( l.encode('cp1252', 'replace') )
+        print( l )
 
 def gh_login():
     '''Login to github and create a session'''
