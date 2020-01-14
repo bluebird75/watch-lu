@@ -510,14 +510,14 @@ def git_commit_and_push():
 
 
 ACTIONS = {
-    'watch_luarocks': watch_luarocks,
-    'watch_gh_data':  watch_gh_data,
-    'watch_gh_metadata':  watch_gh_metadata,
-    'gh_push': git_commit_and_push,
-    'analyse_projects_data': analyse_projects_data,
-    'analyse_projects_data_without_luaunit': analyse_projects_data_without_luaunit,
+    'watch_luarocks': (watch_luarocks, 'Retrieve information from luarocks about luaunit'),
+    'watch_gh_data':  (watch_gh_data, 'Analyse information about number of projects using luaunit in Github'),
+    'watch_gh_metadata':  (watch_gh_metadata, 'Retrieve information about luaunit project in GitHub'),
+    'gh_push': (git_commit_and_push, 'Push update of the DB to Git'),
+    'analyse_projects_data': (analyse_projects_data, 'Analyse all projects using a luaunit.lua file and update the DB'),
+    'analyse_projects_data_without_luaunit': (analyse_projects_data_without_luaunit, 'Analyse all projects referencing a luaunit.lua file'),
 }
-HELP_ACTIONS = 'Possible ACTIONS: %s' % ', '.join(ACTIONS.keys())
+HELP_ACTIONS = 'Possible ACTIONS:\n\t' + '\n\t'.join( '%s: %s' % (k, v[1]) for (k,v) in ACTIONS.items() )
 
 
 if __name__ == '__main__':
@@ -528,10 +528,12 @@ if __name__ == '__main__':
     parser.add_argument( '--start-page' )
     parser.add_argument( '--end-page' )
     parser.add_argument( '--print-db', action='store_true' )
-    parser.add_argument( 'actions', nargs='*', help=HELP_ACTIONS )
+    parser.add_argument( 'actions', nargs='*', help='see below')
     result = parser.parse_args()
 
     if len(result.actions) < 1:
+        parser.print_help()
+        print()
         print( HELP_ACTIONS )
         sys.exit(1)
 
@@ -564,7 +566,7 @@ if __name__ == '__main__':
     init_db_dict()
 
     for action in result.actions:
-        ACTIONS[action]()
+        ACTIONS[action][0]()
 
     if result.print_db:
         pprint.pprint( updated_data )
