@@ -1,6 +1,5 @@
 from bs4 import BeautifulSoup
 import requests
-import six
 
 import sys, os, ast, pprint, subprocess, functools, datetime, collections, re, time, argparse
 
@@ -15,6 +14,7 @@ END_PAGE=None
 START_PAGE=None
 NONET=False
 updated_data = []
+DEBUG=True
 
 class ParseError(Exception):
     '''Raised when the format of the page has changed and is no longer parseable asis by watch-lu'''
@@ -177,10 +177,15 @@ def gh_data_fetch_and_archive_ref_luaunit_code(session, page=None):
     open('gh_ref_luaunit_code.txt', 'wb').write( r.text.encode('utf8') )
     return r.text
 
-def enc_print( info, t ):
-    for l in  ( '\n%s=%s' % (info,t) ).split('\n'):
-        # six.print_( l.encode('cp1252', 'replace') )
-        print( l )
+def dbg( info, t ):
+    '''Print debug infromation if DEBUG is set to True'''
+    if DEBUG == False:
+        return
+    first = True
+    multiline = ( '%s=%s\n' % (info,t) ).split('\n')
+    print(multiline[0])
+    for l in multiline[1:]:
+        print('\t' + l )
 
 def gh_login():
     '''Login to github and create a session'''
@@ -188,7 +193,7 @@ def gh_login():
         return 'no network, no session', True
     if hasattr(gh_login, 'session'):
         print('Reusing login session')
-        return gh_login.session        
+        return gh_login.session, True
 
     session = requests.Session()
 
@@ -200,8 +205,8 @@ def gh_login():
     soup = BeautifulSoup( r.text, "html.parser" )
     input_utf8 = soup.find_all('input')[0]['value']
     input_auth_token = soup.find_all('input')[1]['value']
-    # enc_print( input_utf8 )
-    # enc_print( input_auth_token )
+    dbg( 'input_utf8', input_utf8 )
+    dbg( 'input_auth_token', input_auth_token )
     user, pwd = get_gh_user_pwd()
     payload = { 'authenticity_token': input_auth_token, 'utf8' : input_utf8, 'login': user, 'password' : pwd,   }
     # print(str(payload).encode('cp1252', 'replace'))
@@ -289,20 +294,20 @@ def extend_project_info( session, projects, page, pnb, have_luaunit ):
     all_code = soup.find_all("div", "code-list-item")
     added_projects = {}
     for code_item in all_code:
-        six.print_('.', end='', flush=True)
-        # enc_print( 'code_item', str(code_item ) )
+        print('.', end='', flush=True)
+        dbg( 'code_item', str(code_item ) )
         proj_auth_name = code_item.div.div.a.string.strip()
-        # enc_print( 'proj_auth_name',  proj_auth_name )
+        dbg( 'proj_auth_name',  proj_auth_name )
         proj_auth, proj_name = proj_auth_name.split('/')
         path_item = code_item.div.div.next_sibling.next_sibling.a
-        # enc_print( 'path_item', path_item )
+        dbg( 'path_item', path_item )
 
         if have_luaunit:
             # we have a reference to luaunit file
             proj_luau_relpath =  path_item['title']
             proj_luau_fullpath = 'https://github.com/' + path_item['href']
-            # enc_print( 'proj_luau_relpath', proj_luau_relpath )
-            # enc_print( 'proj_luau_fullpath', proj_luau_fullpath )
+            dbg( 'proj_luau_relpath', proj_luau_relpath )
+            dbg( 'proj_luau_fullpath', proj_luau_fullpath )
             proj_ref_luau_relpath =  ''
             proj_ref_luau_fullpath = ''
 
@@ -341,7 +346,7 @@ def extend_project_info( session, projects, page, pnb, have_luaunit ):
         d['luau_rel_path'] .append( proj_luau_relpath )
         d['luau_ref_full_path'].append( proj_ref_luau_fullpath )
         d['luau_ref_rel_path'] .append( proj_ref_luau_relpath )
-        d['luau_file_search_page'].append( six.u('%s' % pnb) )
+        d['luau_file_search_page'].append( '%s' % pnb)
 
         # add extra github data about project
         repo = gh_api().get_repo( proj_auth_name )
@@ -350,7 +355,7 @@ def extend_project_info( session, projects, page, pnb, have_luaunit ):
             'stars' : repo.stargazers_count,
             'watchers' : repo.watchers_count,
         }
-        # enc_print( 'extra_data', extra_data )
+        dbg( 'extra_data', extra_data )
         d.update( extra_data )
 
     return added_projects
@@ -390,7 +395,7 @@ def analyse_projects_data( have_luaunit=True ):
 
     print('Scanning github...')
     for pnb in range(startpage, endpage+1):
-        six.print_('P%d' % pnb, end='', flush=True)
+        print('P%d' % pnb, end='', flush=True)
         if have_luaunit:
             page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
         else:
@@ -424,9 +429,9 @@ def analyse_projects_data( have_luaunit=True ):
         for proj_info in sorted( projects.keys() ):
             for k in fields:
                 v = projects[proj_info][k]
-                if type(v) in six.integer_types:
+                if type(v) == type(22):
                     f.write( bytes(v) )
-                elif type(v) == six.text_type:
+                elif type(v) == type('33'):
                     f.write( v.encode('cp1252', 'replace') )
                 elif type(v) == type([]):
                     f.write( b'"' )
@@ -439,9 +444,9 @@ def analyse_projects_data( have_luaunit=True ):
                 f.write(b';')
             f.write(b'\n')
     except:
-        six.print_('Error when handling field %s' % (six.b(k)) )
-        six.print_('from project %s' % (six.b(projects[proj_info]['proj_path']) ))
-        six.print_('of page %s' % (six.b(projects[proj_info]['luau_file_search_page'] ) ) )
+        print('Error when handling field %s' % k )
+        print('from project %s' % (projects[proj_info]['proj_path']))
+        print('of page %s' % (projects[proj_info]['luau_file_search_page'] ) )
         raise
     finally:
         f.close()
@@ -504,6 +509,27 @@ def git_commit_and_push():
     subprocess.call(['git', 'commit', '--quiet', '-m', 'DB update', 'dbdict.txt'])
     subprocess.call(['git', 'push', '--quiet'])
 
+def dl_to_csv():
+    '''Read the dbdict and transform the download data into a CSV file'''
+    global dbdict
+    init_db_dict()
+
+    import csv, statistics
+    f = open('dl_analysis.csv','w', newline='')
+    csv_writer = csv.writer(f, delimiter=';')
+    data = dbdict[NB_DL_LUAROCKS_TOTAL][:]
+    data.sort()
+
+    csv_writer.writerow( ['Date', 'Nb of downloads', 'Average daily downloads over 7 days'] )
+    for i,d in enumerate(data):
+        v = list(d)
+        if i > 7:
+            nb_days = (datetime.date.fromisoformat(data[i][0])-datetime.date.fromisoformat(data[i-7][0])).days
+            v.append( ('%.1f' % ((data[i][1]-data[i-7][1])/nb_days)).replace('.',','))
+        csv_writer.writerow( v )
+    f.close()
+
+
 
 ################################################################################333
 #
@@ -512,11 +538,12 @@ def git_commit_and_push():
 
 ACTIONS = {
     'watch_luarocks': (watch_luarocks, 'Retrieve information from luarocks about luaunit'),
-    'watch_gh_data':  (watch_gh_data, 'Analyse information about number of projects using luaunit in Github'),
-    'watch_gh_metadata':  (watch_gh_metadata, 'Retrieve information about luaunit project in GitHub'),
+    'watch_gh_data':  (watch_gh_data, 'Retrieve of projects using luaunit in Github (quick)'),
+    'watch_gh_metadata':  (watch_gh_metadata, 'Retrieve information about luaunit project in GitHub (quick)'),
     'gh_push': (git_commit_and_push, 'Push update of the DB to Git'),
-    'analyse_projects_data': (analyse_projects_data, 'Analyse all projects using a luaunit.lua file and update the DB'),
+    'analyse_projects_data': (analyse_projects_data, 'Analyse all projects using a luaunit.lua file to check if some popular projects are using luaunit'),
     'analyse_projects_data_without_luaunit': (analyse_projects_data_without_luaunit, 'Analyse all projects referencing a luaunit.lua file'),
+    'dl_to_csv': (dl_to_csv, 'Extract download data into CSV'),
 }
 HELP_ACTIONS = 'Possible ACTIONS:\n\t' + '\n\t'.join( '%s: %s' % (k, v[1]) for (k,v) in ACTIONS.items() )
 
