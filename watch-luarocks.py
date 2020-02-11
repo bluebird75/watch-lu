@@ -14,7 +14,10 @@ END_PAGE=None
 START_PAGE=None
 NONET=False
 updated_data = []
-DEBUG=True
+DEBUG=False
+
+USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0'
+HEADERS = {'User-Agent': USER_AGENT}
 
 class ParseError(Exception):
     '''Raised when the format of the page has changed and is no longer parseable asis by watch-lu'''
@@ -88,7 +91,7 @@ def luarocks_fetch_nb_dl():
     Return: (nb of dowloand of luaunit, nb of download of v3.3)
     '''
     net_sleep()
-    s = requests.get(LUAROCKS_PROJECT).text
+    s = requests.get(LUAROCKS_PROJECT, headers=HEADERS).text
     soup = BeautifulSoup( s, "html.parser" )
     e = soup.find_all(string='Downloads' )[0]
     # print( e )
@@ -152,30 +155,24 @@ def get_gh_user_pwd():
     return user, pwd
 
 def gh_data_fetch_and_archive_have_luaunit_file(session, page=None):
-    '''Retrieve the result page about project containing a luaunit.lua file and return the text content
-    '''
-    if NONET:
-        page = open('gh_have_luaunit_file.txt', 'rb').read().decode( 'utf8')
-        return page
-
-    pageref='&p=%d' % page if page else ''
-    net_sleep()
-    r = session.get('https://github.com/search?utf8=%E2%9C%93&q=filename%3Aluaunit.lua&type=Code&ref=searchresults' + pageref)
-    open('gh_have_luaunit_file.txt', 'wb').write( r.text.encode('utf8') )
-    return r.text
+    '''Search for projects containing a file named luaunit.lua'''
+    resp = session.get('https://api.github.com/search/code', params={'q':'filename:luaunit.lua'})
+    resp_json = resp.json()
+    if 'errors' in resp_json:
+        pprint.pprint(resp_json)
+        sys.exit(-1)
+    dbg('json_resp', pprint.pformat(resp_json))
+    return resp_json
 
 def gh_data_fetch_and_archive_ref_luaunit_code(session, page=None):
-    '''Retrieve the result page about project referencing luaunit.lua and return the text content
-    '''
-    if NONET:
-        page = open('gh_ref_luaunit_code.txt', 'rb').read().decode( 'utf8')
-        return page
-
-    pageref='&p=%d' % page if page else ''
-    net_sleep()
-    r = session.get('https://github.com/search?utf8=%E2%9C%93&q=luaunit.lua&type=Code&ref=searchresults' + pageref)
-    open('gh_ref_luaunit_code.txt', 'wb').write( r.text.encode('utf8') )
-    return r.text
+    '''Search for projects containing a string "luaunit.lua" in their code'''
+    resp = session.get('https://api.github.com/search/code', params={'q':'luaunit.lua'})
+    resp_json = resp.json()
+    if 'errors' in resp_json:
+        pprint.pprint(resp_json)
+        sys.exit(-1)
+    dbg('json_resp', pprint.pformat(resp_json))
+    return resp_json
 
 def dbg( info, t ):
     '''Print debug infromation if DEBUG is set to True'''
@@ -188,62 +185,26 @@ def dbg( info, t ):
         print('\t' + l )
 
 def gh_login():
-    '''Login to github and create a session'''
+    '''Create a requests session with user credentials'''
     if NONET:
         return 'no network, no session', True
+
     if hasattr(gh_login, 'session'):
         print('Reusing login session')
         return gh_login.session, True
 
     session = requests.Session()
-
-    # open login page
-    r = session.get( 'https://github.com/login' )
-    open('gh_login1.txt', 'wb').write( r.text.encode('utf8' ) )
-
-    # perform login
-    soup = BeautifulSoup( r.text, "html.parser" )
-    input_utf8 = soup.find_all('input')[0]['value']
-    input_auth_token = soup.find_all('input')[1]['value']
-    dbg( 'input_utf8', input_utf8 )
-    dbg( 'input_auth_token', input_auth_token )
-    user, pwd = get_gh_user_pwd()
-    payload = { 'authenticity_token': input_auth_token, 'utf8' : input_utf8, 'login': user, 'password' : pwd,   }
-    # print(str(payload).encode('cp1252', 'replace'))
-    r = session.post( 'https://github.com/session', data=payload  )
-    open('gh_login2.txt', 'wb').write( r.text.encode('utf8') )
-
-    # validate login
-    soup = BeautifulSoup( r.text, "html.parser" )
-    if soup.get_text().find('Incorrect username or password') != -1:
-        print('Login failed! user="%s" pwd="%s"' % (GH_USER, GH_PWD) )
-        return session, False
-
-    # store session for later re-use
+    session.auth = get_gh_user_pwd()
     gh_login.session = session
-
     return session, True
-
-def count_results( data ):
-    '''Count the number of results of a github search page result'''
-    soup = BeautifulSoup( data, "html.parser" )
-    el = soup.find_all("div", 'd-flex flex-column flex-md-row flex-justify-between border-bottom pb-3 position-relative' )
-    if len(el) < 1:
-        raise ParseError('Could not locate the number of results in the github page')
-    e = el[0]
-    s = e.h3.string
-    if s == None:
-        s = e.h3.span.string
-    nb = extract_digit( s )
-    return nb
 
 def watch_gh_data():
     '''Retrieve data from github about number of use of luaunit.lua and store into db'''
     session, success = gh_login()
     if not success:
         return
-    nb_have_luaunit_file = count_results( gh_data_fetch_and_archive_have_luaunit_file(session) )
-    nb_ref_luaunit_code = count_results( gh_data_fetch_and_archive_ref_luaunit_code(session) )
+    nb_have_luaunit_file = gh_data_fetch_and_archive_have_luaunit_file(session)['total_count']
+    nb_ref_luaunit_code = gh_data_fetch_and_archive_ref_luaunit_code(session)['total_count']
     today = datetime.date.today().isoformat()
     update_db_list( GH_DATA_HAVE_LUAUNIT_FILE, (today, nb_have_luaunit_file) )
     update_db_list( GH_DATA_REF_LUAUNIT_CODE , (today, nb_ref_luaunit_code ) )
@@ -262,8 +223,8 @@ def get_luaunit_version( session, proj_luau_fullpath ):
         raise ConnectionError('Can not analyse version of file without network') 
     raw_luaunit_url = proj_luau_fullpath.replace('blob', 'raw')
     net_sleep()
-    r = session.get(proj_luau_fullpath)
-    open('dl_luaunit.txt', 'wb').write( r.text.encode('utf8') )
+    r = session.get(proj_luau_fullpath, headers=HEADERS)
+    open('dl_luaunit.html', 'wb').write( r.text.encode('utf8') )
     if r.text.find('Philippe') == -1:
         # print('No philippe in %s' % raw_luaunit_url )
         return None
@@ -377,6 +338,7 @@ def analyse_projects_data( have_luaunit=True ):
 
     Archive the results in the DB file
     '''
+    raise ImplementationError("Need to be reworked with REST API")
     session, success = gh_login()
     if not success:
         return
@@ -590,7 +552,7 @@ if __name__ == '__main__':
             print('End page: %d' % int(result.end_page) )
             set_end_page( int( result.end_page ) )
 
-        # git_pull()
+        git_pull()
     init_db_dict()
 
     for action in result.actions:
