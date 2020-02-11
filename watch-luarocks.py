@@ -16,9 +16,6 @@ NONET=False
 updated_data = []
 DEBUG=False
 
-USER_AGENT = 'Mozilla/5.0 (Windows NT 6.1; WOW64; rv:54.0) Gecko/20100101 Firefox/54.0'
-HEADERS = {'User-Agent': USER_AGENT}
-
 class ParseError(Exception):
     '''Raised when the format of the page has changed and is no longer parseable asis by watch-lu'''
     pass
@@ -147,12 +144,12 @@ def get_gh_user_pwd():
     try:
         path = '%s/.ssh/GH_USER' % home
         user = open(path).read().strip()
-        path = '%s/.ssh/GH_PWD' % home
-        pwd  = open(path).read().strip()
+        path = '%s/.ssh/GH_PAT_TOKEN' % home
+        token = open(path).read().strip()
     except IOError:
         print('Could not read file %s' % path)
         raise Exception("GH_USER and GH_PWD must be set for this action.")
-    return user, pwd
+    return user, token
 
 def gh_data_fetch_and_archive_have_luaunit_file(session, page=None):
     '''Search for projects containing a file named luaunit.lua'''
