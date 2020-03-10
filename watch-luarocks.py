@@ -88,7 +88,7 @@ def luarocks_fetch_nb_dl():
     Return: (nb of dowloand of luaunit, nb of download of v3.3)
     '''
     net_sleep()
-    s = requests.get(LUAROCKS_PROJECT, headers=HEADERS).text
+    s = requests.get(LUAROCKS_PROJECT).text
     soup = BeautifulSoup( s, "html.parser" )
     e = soup.find_all(string='Downloads' )[0]
     # print( e )
@@ -220,7 +220,7 @@ def get_luaunit_version( session, proj_luau_fullpath ):
         raise ConnectionError('Can not analyse version of file without network') 
     raw_luaunit_url = proj_luau_fullpath.replace('blob', 'raw')
     net_sleep()
-    r = session.get(proj_luau_fullpath, headers=HEADERS)
+    r = session.get(proj_luau_fullpath)
     open('dl_luaunit.html', 'wb').write( r.text.encode('utf8') )
     if r.text.find('Philippe') == -1:
         # print('No philippe in %s' % raw_luaunit_url )
