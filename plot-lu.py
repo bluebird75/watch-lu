@@ -13,6 +13,8 @@ GH_METADATA = 'GH_METADATA'
 NB_DL_LUAROCKS_TOTAL = 'NB_DL_LUAROCKS_TOTAL'
 NB_DL_LUAROCKS_V33 = 'NB_DL_LUAROCKS_V33'
 
+ALPHA = 0.10
+
 def import_dbdict():
     with open('dbdict.txt') as f:
         fcontent = f.read()
@@ -20,28 +22,42 @@ def import_dbdict():
     return d
 
 
+def moving_exp_avg(data_date, data_val):
+    prev_avg = None
+    prev_dt = None
+    data_avg = []
+    for dt, val in zip(data_date[1:], data_val):
+        if (prev_avg, prev_dt) == (None, None):
+            new_avg = val
+            dt_delta = 1
+        else:
+            dt_delta = dt-prev_dt
+            new_avg = prev_avg + ALPHA*(val/dt_delta-prev_avg)
+        data_avg.append((dt, new_avg))
+        prev_avg = new_avg
+        prev_dt = dt
+    return data_avg
+
+
+
 def graphics_luarocks(data):
 
-    nb_dl_tot = list(reversed(data[NB_DL_LUAROCKS_TOTAL]))
-    nb_dl_tot_date = [dates.datestr2num(v[0]) for v in nb_dl_tot]
-    nb_dl_tot_val  = [v[1] for v in nb_dl_tot]
+    cum_dl = list(reversed(data[NB_DL_LUAROCKS_TOTAL]))
+    cum_dl_date = [dates.datestr2num(v[0]) for v in cum_dl]
+    cum_dl_val  = [v[1] for v in cum_dl]
 
-
-    daily_dl_7d = [ (day_nb1[0], 
-                     (day_nb2[1]-day_nb1[1]), 
-                     (dates.datestr2num(day_nb2[0]) - dates.datestr2num(day_nb1[0]))
-                    )
-        for (day_nb1, day_nb2) in zip(nb_dl_tot[:-7], nb_dl_tot[7:]) ]
-    daily_dl_7d_date = [ dates.datestr2num(dt) + delta/2 for dt, nb, delta in daily_dl_7d ]
-    daily_dl_7d_nb   = [ nb/delta for dt, nb, delta in daily_dl_7d ]
+    daily_dl = [(v2-v1)/(dt2-dt1) for v1,v2,dt1,dt2 in zip(cum_dl_val[:-1], cum_dl_val[1:], cum_dl_date[:-1], cum_dl_date[1:])]
+    daily_dl_avg = moving_exp_avg(cum_dl_date, daily_dl)
+    daily_dl_avg_date = [ v[0] for v in daily_dl_avg ]
+    daily_dl_avg_nb   = [ v[1] for v in daily_dl_avg ]
 
 
     plot_cumulated_and_avg(
         'Cumulated download of LuaUnit package',
-        nb_dl_tot_date, nb_dl_tot_val,
+        cum_dl_date, cum_dl_val,
 
-        'Daily download of LuaUnit package (average on 7 days)',
-        daily_dl_7d_date, daily_dl_7d_nb,
+        'Average daily download of LuaUnit package',
+        daily_dl_avg_date, daily_dl_avg_nb,
     )
 
 def graphics_projects_using_lu(data):
@@ -96,8 +112,8 @@ def plot_cumulated_and_avg(title_data_sum, x_data_sum, y_data_sum,
 
 def main():
     data = import_dbdict()
-    # graphics_luarocks(data)
-    graphics_projects_using_lu(data)
+    graphics_luarocks(data)
+    # graphics_projects_using_lu(data)
 
 if __name__ == '__main__':
     main()
