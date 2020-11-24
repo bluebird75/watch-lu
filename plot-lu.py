@@ -35,31 +35,14 @@ def graphics_luarocks(data):
     daily_dl_7d_date = [ dates.datestr2num(dt) + delta/2 for dt, nb, delta in daily_dl_7d ]
     daily_dl_7d_nb   = [ nb/delta for dt, nb, delta in daily_dl_7d ]
 
-    pprint([(nb, dates.num2date(dt)) for nb, dt in zip(daily_dl_7d_nb, daily_dl_7d_date) if nb > 5000 ])
 
+    plot_cumulated_and_avg(
+        'Cumulated download of LuaUnit package',
+        nb_dl_tot_date, nb_dl_tot_val,
 
-    # pyplot.xkcd()
-    fig, (ax1, ax2) = pyplot.subplots(2,1)
-    locator = dates.AutoDateLocator()
-    formatter = dates.ConciseDateFormatter(locator)
-
-    ax1.xaxis.set_major_locator(locator)
-    ax1.xaxis.set_major_formatter(formatter)
-    ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%dk' % (x//1000)))
-    ax1.plot_date(nb_dl_tot_date, nb_dl_tot_val, '-')
-    ax1.set_title('Cumulated download of LuaUnit package')
-    ax1.grid(True)
-
-    ax2.xaxis.set_major_locator(locator)
-    ax2.xaxis.set_major_formatter(formatter)
-    ax2.plot_date(daily_dl_7d_date, daily_dl_7d_nb, '-')
-    ax2.set_title('Daily download of LuaUnit package (average on 7 days)')
-    ax2.grid(True)
-
-
-    pyplot.tight_layout()
-    pyplot.show()
-
+        'Daily download of LuaUnit package (average on 7 days)',
+        daily_dl_7d_date, daily_dl_7d_nb,
+    )
 
 def graphics_projects_using_lu(data):
 
@@ -77,30 +60,38 @@ def graphics_projects_using_lu(data):
     daily_new_ref_lu_date = [ dates.datestr2num(dt) + delta/2 for dt, nb, delta in daily_new_ref_lu ]
     daily_new_ref_lu_nb   = [ nb/delta*delta_days for dt, nb, delta in daily_new_ref_lu ]
 
-    matplotlib.use('qt5agg')
+    plot_cumulated_and_avg(
+        'GitHub projects referencing LuaUnit',
+        nb_ref_lu_date, nb_ref_lu_val,
 
-    # pyplot.xkcd()
+        'New projects referencing LuaUnit per day',
+        daily_new_ref_lu_date, daily_new_ref_lu_nb,
+    )
+
+
+def plot_cumulated_and_avg(title_data_sum, x_data_sum, y_data_sum, 
+                           title_data_avg, x_data_avg, y_data_avg):
+
     fig, (ax1, ax2) = pyplot.subplots(2,1)
     locator = dates.AutoDateLocator()
     formatter = dates.ConciseDateFormatter(locator)
 
     ax1.xaxis.set_major_locator(locator)
     ax1.xaxis.set_major_formatter(formatter)
-    # ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%dk' % (x//1000)))
-    ax1.plot_date(nb_ref_lu_date, nb_ref_lu_val, '-')
-    ax1.set_title('GitHub projects referencing LuaUnit')
+    ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%dk' % (x//1000)))
+    ax1.plot_date(x_data_sum, y_data_sum, '-')
+    ax1.set_title(title_data_sum)
     ax1.grid(True)
 
     ax2.xaxis.set_major_locator(locator)
     ax2.xaxis.set_major_formatter(formatter)
-    ax2.plot_date(daily_new_ref_lu_date, daily_new_ref_lu_nb, '-')
-    ax2.set_title('New projects referencing LuaUnit per day')
+    ax2.plot_date(x_data_avg, y_data_avg, '-')
+    ax2.set_title(title_data_avg)
     ax2.grid(True)
 
 
     pyplot.tight_layout()
     pyplot.show()
-
 
 
 def main():
