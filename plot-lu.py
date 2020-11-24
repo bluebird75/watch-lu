@@ -38,8 +38,6 @@ def graphics_luarocks(data):
     pprint([(nb, dates.num2date(dt)) for nb, dt in zip(daily_dl_7d_nb, daily_dl_7d_date) if nb > 5000 ])
 
 
-    matplotlib.use('qt5agg')
-
     # pyplot.xkcd()
     fig, (ax1, ax2) = pyplot.subplots(2,1)
     locator = dates.AutoDateLocator()
@@ -64,23 +62,20 @@ def graphics_luarocks(data):
 
 
 def graphics_projects_using_lu(data):
-    return
 
-    nb_dl_tot = list(reversed(data[NB_DL_LUAROCKS_TOTAL]))
-    nb_dl_tot_date = [dates.datestr2num(v[0]) for v in nb_dl_tot]
-    nb_dl_tot_val  = [v[1] for v in nb_dl_tot]
+    nb_ref_lu = list(reversed(data[GH_DATA_REF_LUAUNIT_CODE]))
+    nb_ref_lu_date = [dates.datestr2num(v[0]) for v in nb_ref_lu]
+    nb_ref_lu_val  = [v[1] for v in nb_ref_lu]
 
 
-    daily_dl_7d = [ (day_nb1[0], 
+    delta_days = 30
+    daily_new_ref_lu = [ (day_nb1[0], 
                      (day_nb2[1]-day_nb1[1]), 
                      (dates.datestr2num(day_nb2[0]) - dates.datestr2num(day_nb1[0]))
                     )
-        for (day_nb1, day_nb2) in zip(nb_dl_tot[:-7], nb_dl_tot[7:]) ]
-    daily_dl_7d_date = [ dates.datestr2num(dt) + delta/2 for dt, nb, delta in daily_dl_7d ]
-    daily_dl_7d_nb   = [ nb/delta for dt, nb, delta in daily_dl_7d ]
-
-    pprint([(nb, dates.num2date(dt)) for nb, dt in zip(daily_dl_7d_nb, daily_dl_7d_date) if nb > 5000 ])
-
+        for (day_nb1, day_nb2) in zip(nb_ref_lu[:-delta_days], nb_ref_lu[delta_days:]) ]
+    daily_new_ref_lu_date = [ dates.datestr2num(dt) + delta/2 for dt, nb, delta in daily_new_ref_lu ]
+    daily_new_ref_lu_nb   = [ nb/delta*delta_days for dt, nb, delta in daily_new_ref_lu ]
 
     matplotlib.use('qt5agg')
 
@@ -91,15 +86,15 @@ def graphics_projects_using_lu(data):
 
     ax1.xaxis.set_major_locator(locator)
     ax1.xaxis.set_major_formatter(formatter)
-    ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%dk' % (x//1000)))
-    ax1.plot_date(nb_dl_tot_date, nb_dl_tot_val, '-')
-    ax1.set_title('Cumulated download of LuaUnit package')
+    # ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%dk' % (x//1000)))
+    ax1.plot_date(nb_ref_lu_date, nb_ref_lu_val, '-')
+    ax1.set_title('GitHub projects referencing LuaUnit')
     ax1.grid(True)
 
     ax2.xaxis.set_major_locator(locator)
     ax2.xaxis.set_major_formatter(formatter)
-    ax2.plot_date(daily_dl_7d_date, daily_dl_7d_nb, '-')
-    ax2.set_title('Daily download of LuaUnit package (average on 7 days)')
+    ax2.plot_date(daily_new_ref_lu_date, daily_new_ref_lu_nb, '-')
+    ax2.set_title('New projects referencing LuaUnit per day')
     ax2.grid(True)
 
 
@@ -110,7 +105,7 @@ def graphics_projects_using_lu(data):
 
 def main():
     data = import_dbdict()
-    graphics_luarocks(data)
+    # graphics_luarocks(data)
     graphics_projects_using_lu(data)
 
 if __name__ == '__main__':
