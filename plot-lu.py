@@ -1,5 +1,6 @@
 import ast
 from pprint import pprint
+from datetime import date as dt_date
 
 import matplotlib
 import matplotlib.pyplot as pyplot
@@ -63,26 +64,64 @@ def graphics_luarocks(data):
 def graphics_projects_using_lu(data):
 
     nb_ref_lu = list(reversed(data[GH_DATA_REF_LUAUNIT_CODE]))
-    nb_ref_lu_date = [dates.datestr2num(v[0]) for v in nb_ref_lu]
+    nb_ref_lu_date = [dt_date.fromisoformat(v[0]) for v in nb_ref_lu]
     nb_ref_lu_val  = [v[1] for v in nb_ref_lu]
 
 
-    delta_days = 30
-    daily_new_ref_lu = [ (day_nb1[0], 
-                     (day_nb2[1]-day_nb1[1]), 
-                     (dates.datestr2num(day_nb2[0]) - dates.datestr2num(day_nb1[0]))
-                    )
-        for (day_nb1, day_nb2) in zip(nb_ref_lu[:-delta_days], nb_ref_lu[delta_days:]) ]
-    daily_new_ref_lu_date = [ dates.datestr2num(dt) + delta/2 for dt, nb, delta in daily_new_ref_lu ]
-    daily_new_ref_lu_nb   = [ nb/delta*delta_days for dt, nb, delta in daily_new_ref_lu ]
+    # fill dates for each quarter
+    last_date = dt_date(2016,1,1)
+    quart_dates = [last_date]
+    while last_date < dt_date.today():
+        if last_date.month < 9:
+            new_date = dt_date(last_date.year, last_date.month+3, 1)
+        else:
+            new_date = dt_date(last_date.year+1, 1, 1)
+        quart_dates.append(new_date)
+        last_date = new_date
 
-    plot_cumulated_and_avg(
-        'GitHub projects referencing LuaUnit',
-        nb_ref_lu_date, nb_ref_lu_val,
+    # keep only quarter dates after the start of our date series
+    quart_dates = [qdt for qdt in quart_dates if qdt >= nb_ref_lu_date[0]]
 
-        'New projects referencing LuaUnit per day',
-        daily_new_ref_lu_date, daily_new_ref_lu_nb,
-    )
+    quart_dt_val = []
+    # find one date for each quarter immediatly after the start of the quarter
+    for qdt in quart_dates:
+        # find first date after this quarter
+        # keep the date and the value for this quarter
+        post_dt_nb_ref_lu = [(dt,val) for (dt,val) in zip(nb_ref_lu_date, nb_ref_lu_val) if dt >= qdt]
+        if len(post_dt_nb_ref_lu) == 0:
+            # end of our series
+            break
+        quart_dt_val.append((qdt, post_dt_nb_ref_lu[0][1]))
+
+    # now we have dates for each quarter with a value
+    quart_dt_val_delta = [ (v1[0], (v2[1]-v1[1])/(v2[0]-v1[0]).days*92) for v1, v2 in zip(quart_dt_val[:-1], quart_dt_val[1:]) ]
+    quart_dt_dates = [v[0] for v in quart_dt_val_delta ]
+    quart_dt_delta = [v[1] for v in quart_dt_val_delta ]
+
+
+    fig, (ax1, ax2) = pyplot.subplots(2,1)
+    locator = dates.AutoDateLocator()
+    formatter = dates.ConciseDateFormatter(locator)
+
+    ax1.xaxis.set_major_locator(locator)
+    ax1.xaxis.set_major_formatter(formatter)
+    # ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%dk' % (x//1000)))
+    ax1.plot_date(nb_ref_lu_date, nb_ref_lu_val, '-')
+    ax1.set_title('GitHub projects referencing LuaUnit')
+    ax1.grid(True)
+
+    ax2.xaxis.set_major_locator(ticker.FixedLocator([dates.date2num(v) for v in quart_dates]))
+    # ax2.xaxis.set_major_locator(ticker.IndexLocator(92, dates.date2num(quart_dates[0])))
+    # ax2.xaxis.set_major_formatter(formatter)
+    ax2.xaxis.set_major_formatter(ticker.FuncFormatter(
+        lambda x, pos: ( ('Q%d-%02d' % (dates.num2date(x).month//3+1, dates.num2date(x).year%100)) )))
+    ax2.bar(quart_dt_dates, quart_dt_delta, 80)
+    ax2.set_title('New projects referencing LuaUnit per quarter')
+    ax2.grid(True)
+
+
+    pyplot.tight_layout()
+    pyplot.show()
 
 
 def plot_cumulated_and_avg(title_data_sum, x_data_sum, y_data_sum, 
@@ -112,9 +151,11 @@ def plot_cumulated_and_avg(title_data_sum, x_data_sum, y_data_sum,
 
 def main():
     data = import_dbdict()
-    graphics_luarocks(data)
-    # graphics_projects_using_lu(data)
+    # graphics_luarocks(data)
+    graphics_projects_using_lu(data)
 
 if __name__ == '__main__':
     main()
 
+# TODO:
+# - with the quarter graphics, the last quarter value should be trimmed off and is forced to null ?
