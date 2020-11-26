@@ -468,27 +468,6 @@ def git_commit_and_push():
     subprocess.call(['git', 'commit', '--quiet', '-m', 'DB update', 'dbdict.txt'])
     subprocess.call(['git', 'push', '--quiet'])
 
-def dl_to_csv():
-    '''Read the dbdict and transform the download data into a CSV file'''
-    global dbdict
-    init_db_dict()
-
-    import csv, statistics
-    f = open('dl_analysis.csv','w', newline='')
-    csv_writer = csv.writer(f, delimiter=';')
-    data = dbdict[NB_DL_LUAROCKS_TOTAL][:]
-    data.sort()
-
-    csv_writer.writerow( ['Date', 'Nb of downloads', 'Average daily downloads over 7 days'] )
-    for i,d in enumerate(data):
-        v = list(d)
-        if i > 7:
-            nb_days = (datetime.date.fromisoformat(data[i][0])-datetime.date.fromisoformat(data[i-7][0])).days
-            v.append( ('%.1f' % ((data[i][1]-data[i-7][1])/nb_days)).replace('.',','))
-        csv_writer.writerow( v )
-    f.close()
-
-
 
 ################################################################################333
 #
@@ -497,12 +476,11 @@ def dl_to_csv():
 
 ACTIONS = {
     'watch_luarocks': (watch_luarocks, 'Retrieve information from luarocks about luaunit'),
-    'watch_gh_data':  (watch_gh_data, 'Retrieve of projects using luaunit in Github (quick)'),
+    'watch_gh_data':  (watch_gh_data, 'Retrieve projects using luaunit in Github (quick)'),
     'watch_gh_metadata':  (watch_gh_metadata, 'Retrieve information about luaunit project in GitHub (quick)'),
     'gh_push': (git_commit_and_push, 'Push update of the DB to Git'),
     'analyse_projects_data': (analyse_projects_data, 'Analyse all projects using a luaunit.lua file to check if some popular projects are using luaunit'),
     'analyse_projects_data_without_luaunit': (analyse_projects_data_without_luaunit, 'Analyse all projects referencing a luaunit.lua file'),
-    'dl_to_csv': (dl_to_csv, 'Extract download data into CSV'),
 }
 HELP_ACTIONS = 'Possible ACTIONS:\n\t' + '\n\t'.join( '%s: %s' % (k, v[1]) for (k,v) in ACTIONS.items() )
 
