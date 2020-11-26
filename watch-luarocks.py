@@ -163,7 +163,7 @@ def gh_data_fetch_and_archive_have_luaunit_file(session, page=None):
 
 def gh_data_fetch_and_archive_ref_luaunit_code(session, page=None):
     '''Search for projects containing a string "luaunit.lua" in their code'''
-    resp = session.get('https://api.github.com/search/code', params={'q':'luaunit.lua'})
+    resp = session.get('https://api.github.com/search/code', params={'q':'luaunit require'})
     resp_json = resp.json()
     if 'errors' in resp_json:
         pprint.pprint(resp_json)
