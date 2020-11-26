@@ -1,6 +1,7 @@
 import ast
 from pprint import pprint
 from datetime import date as dt_date
+from datetime import timedelta as dt_timedelta
 
 import matplotlib
 import matplotlib.pyplot as pyplot
@@ -27,13 +28,14 @@ def moving_exp_avg(data_date, data_val):
     prev_avg = None
     prev_dt = None
     data_avg = []
-    for dt, val in zip(data_date[1:], data_val):
+    for dt, val in zip(data_date, data_val):
         if (prev_avg, prev_dt) == (None, None):
             new_avg = val
-            dt_delta = 1
         else:
             dt_delta = dt-prev_dt
-            new_avg = prev_avg + ALPHA*(val/dt_delta-prev_avg)
+            if isinstance(dt_delta, dt_timedelta):
+                dt_delta = dt_delta.days
+            new_avg = prev_avg + ALPHA*(val-prev_avg)
         data_avg.append((dt, new_avg))
         prev_avg = new_avg
         prev_dt = dt
@@ -98,6 +100,10 @@ def graphics_projects_using_lu(data):
     quart_dt_dates = [v[0] for v in quart_dt_val_delta ]
     quart_dt_delta = [v[1] for v in quart_dt_val_delta ]
 
+    quart_dt_avg_delta = moving_exp_avg(quart_dt_dates, quart_dt_delta)
+    quart_dt_avg_dates = [v[0] for v in quart_dt_avg_delta ]
+    quart_dt_avg_delta = [v[1] for v in quart_dt_avg_delta ]
+
 
     fig, (ax1, ax2) = pyplot.subplots(2,1)
     locator = dates.AutoDateLocator()
@@ -110,7 +116,7 @@ def graphics_projects_using_lu(data):
     ax1.set_title('GitHub projects referencing LuaUnit')
     ax1.grid(True)
 
-    ax2.xaxis.set_major_locator(ticker.FixedLocator([dates.date2num(v) for v in quart_dates]))
+    ax2.xaxis.set_major_locator(ticker.FixedLocator([dates.date2num(v) for v in quart_dt_dates]))
     # ax2.xaxis.set_major_locator(ticker.IndexLocator(92, dates.date2num(quart_dates[0])))
     # ax2.xaxis.set_major_formatter(formatter)
     ax2.xaxis.set_major_formatter(ticker.FuncFormatter(
@@ -118,6 +124,7 @@ def graphics_projects_using_lu(data):
     ax2.bar(quart_dt_dates, quart_dt_delta, 80)
     ax2.set_title('New projects referencing LuaUnit per quarter')
     ax2.grid(True)
+    ax2.plot_date(quart_dt_avg_dates, quart_dt_avg_delta, 'r-',)
 
 
     pyplot.tight_layout()
