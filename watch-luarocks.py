@@ -16,6 +16,11 @@ NONET=False
 updated_data = []
 DEBUG=False
 
+RATIO_NB_REF_LUAUNIT_1k_SEARCH_RESULTS = 357/1000
+RATIO_HAVE_FILE_LUAUNIT_1k_SEARCH_RESULTS = 460/1000
+
+GITHUB_LIMIT_REQ_PER_MINUTE = 30
+
 class ParseError(Exception):
     '''Raised when the format of the page has changed and is no longer parseable asis by watch-lu'''
     pass
@@ -37,10 +42,42 @@ def set_nonet( v ):
     global NONET
     NONET=v
 
-def net_sleep():
-    if NET_SLEEP:
-        # sleep to release the bandwidth pressure
-        time.sleep( NET_SLEEP )
+class C_NetSleep:
+    THRESHOLD_THROTTLING_NB_REQ = 20
+
+    def __init__(self):
+        self.nb_calls = 0
+        self.timestamp_init = time.time()
+
+    def __call__(self, *args, **kwargs):
+        if NET_SLEEP is not None:
+            # sleep to release the bandwidth pressure
+            time.sleep( NET_SLEEP )
+            return
+
+        # use a throttling to control the number of requests
+        self.nb_calls += 1
+        if self.nb_calls <= self.THRESHOLD_THROTTLING_NB_REQ:
+            # below our threshold for throttling, we do nothing
+            return
+
+        # ok, let's throttle
+        secs_since_started = (time.time()-self.timestamp_init)
+
+        current_avg_rate_per_min =  self.nb_calls / secs_since_started * 60
+        if current_avg_rate_per_min < GITHUB_LIMIT_REQ_PER_MINUTE:
+            # we are cool
+            return
+
+        # oops, we are requesting too quickly, let's wait a bit
+        nb_secs_within_limit = self.nb_calls / GITHUB_LIMIT_REQ_PER_MINUTE * 60
+
+        nb_secs_to_wait = nb_secs_within_limit - secs_since_started
+        time.wait(nb_secs_to_wait)
+
+
+
+net_sleep = C_NetSleep()
 
 def extract_digit( s ):
     '''Extract the digits from a complex string'''
@@ -151,9 +188,14 @@ def get_gh_user_pwd():
         raise Exception("GH_USER and GH_PWD must be set for this action.")
     return user, token
 
-def gh_data_fetch_and_archive_have_luaunit_file(session, page=None):
+def gh_fetch_have_luaunit_file(session, page=None):
     '''Search for projects containing a file named luaunit.lua'''
-    resp = session.get('https://api.github.com/search/code', params={'q':'filename:luaunit.lua'})
+    params = {'q':'filename:luaunit.lua'}
+    params['per_page'] = '100'
+    if page:
+        params['page'] = str(page)
+    net_sleep()
+    resp = session.get('https://api.github.com/search/code', params=params)
     resp_json = resp.json()
     if 'errors' in resp_json:
         pprint.pprint(resp_json)
@@ -161,9 +203,14 @@ def gh_data_fetch_and_archive_have_luaunit_file(session, page=None):
     dbg('json_resp', pprint.pformat(resp_json))
     return resp_json
 
-def gh_data_fetch_and_archive_ref_luaunit_code(session, page=None):
+def gh_fetch_ref_luaunit_code(session, page=None):
     '''Search for projects containing a string "luaunit.lua" in their code'''
-    resp = session.get('https://api.github.com/search/code', params={'q':'luaunit require'})
+    params = {'q':'require luaunit extension:lua'}
+    params['per_page'] = '100'
+    if page:
+        params['page'] = str(page)
+    net_sleep()
+    resp = session.get('https://api.github.com/search/code', params=params)
     resp_json = resp.json()
     if 'errors' in resp_json:
         pprint.pprint(resp_json)
@@ -200,12 +247,66 @@ def watch_gh_data():
     session, success = gh_login()
     if not success:
         return
-    nb_have_luaunit_file = gh_data_fetch_and_archive_have_luaunit_file(session)['total_count']
-    nb_ref_luaunit_code = gh_data_fetch_and_archive_ref_luaunit_code(session)['total_count']
+    # adjusted to count only projects for all search results
+    nb_ref_luaunit_code = int(gh_fetch_ref_luaunit_code(session)['total_count'] * RATIO_NB_REF_LUAUNIT_1k_SEARCH_RESULTS)
+    nb_have_luaunit_file = int(gh_fetch_have_luaunit_file(session)['total_count'] * RATIO_HAVE_FILE_LUAUNIT_1k_SEARCH_RESULTS)
     today = datetime.date.today().isoformat()
-    update_db_list( GH_DATA_HAVE_LUAUNIT_FILE, (today, nb_have_luaunit_file) )
+    update_db_list(GH_DATA_HAVE_LUAUNIT_FILE, (today, nb_have_luaunit_file) )
     update_db_list( GH_DATA_REF_LUAUNIT_CODE , (today, nb_ref_luaunit_code ) )
     # print(dbdict)
+
+def watch_deep_gh_data():
+    session, success = gh_login()
+    if not success:
+        return
+
+    results_ref_luaunit       = query_all_results(session, gh_fetch_ref_luaunit_code)
+    results_have_luaunit_file = query_all_results(session, gh_fetch_have_luaunit_file)
+
+    print('Reference to LuaUnit: %d estimated with ratio %f' % (results_ref_luaunit[2], results_ref_luaunit[1]))
+    print('Have luaunit.lua file: %d estimated with ratio %f' % (results_have_luaunit_file[2], results_have_luaunit_file[1]))
+
+
+def query_all_results(session, query):
+    '''For the given query returns:
+    - the total number of items matching the query
+    - the ratio of number of unique projects per 1000 results
+    - the estimated number of projects'''
+    items_fetched = 0
+    nb_items_to_fetch = -1
+    page = 1
+    # user_repos = set([])
+    repos = set([])
+
+    while nb_items_to_fetch == -1 or items_fetched < nb_items_to_fetch:
+        json_result = query(session, page=page)
+        if not 'total_count' in json_result:
+            # we have reach the 1000 items limit
+            message = json_result['message']
+            if 'Only the first 1000 search results are available' == message:
+                break
+            else:
+                raise ValueError('Unknown error: %s' % message)
+        nb_items_to_fetch = json_result['total_count']
+        items_fetched += len(json_result['items'])
+        # user_repos.update(result['repository']['full_name'] for result in json_result['items'])
+        repos.update(result['repository']['name'] for result
+                     in json_result['items'])
+        page += 1
+
+    # the actual number of unique projects containing "require luaunit" is calculated as:
+    # - nb_items_to_fetch is the number of search results for "require luaunit", which includes
+    #   multiple matches per repositories and multiple clones of different uses for the same project
+    # - for the first 1000 repos, len(repos) is the number of unique projects requiring luaunit
+    #
+    # So: len(repos)/1000 is the ratio for the number of projects using luaunit for 1000 search results
+    # So: len(repos)/1000*nb_items_to_fetch is an evaluation of the number of unique projects using luaunit
+    # typical values are:
+    # repos: 357 for 1000 matches
+    dbg('nb of unique repos', len(repos))
+    dbg('nb of items fetched:', items_fetched)
+    ratio = len(repos)/1000
+    return nb_items_to_fetch, ratio, int(nb_items_to_fetch*ratio)
 
 def fname_is_luaunit( fpath ):
     '''Return true if last part of the path is exactly luaunit.lua'''
@@ -335,16 +436,16 @@ def analyse_projects_data( have_luaunit=True ):
 
     Archive the results in the DB file
     '''
-    raise ImplementationError("Need to be reworked with REST API")
+    raise NotImplementedError("Need to be reworked with REST API")
     session, success = gh_login()
     if not success:
         return
     projects = {}
 
     if have_luaunit:
-        page = gh_data_fetch_and_archive_have_luaunit_file(session)
+        page = gh_fetch_have_luaunit_file(session)
     else:
-        page = gh_data_fetch_and_archive_ref_luaunit_code(session)
+        page = gh_fetch_ref_luaunit_code(session)
     startpage = 1
     endpage = extract_endpage( page )
     if START_PAGE:
@@ -356,9 +457,9 @@ def analyse_projects_data( have_luaunit=True ):
     for pnb in range(startpage, endpage+1):
         print('P%d' % pnb, end='', flush=True)
         if have_luaunit:
-            page = gh_data_fetch_and_archive_have_luaunit_file(session, pnb)
+            page = gh_fetch_have_luaunit_file(session, pnb)
         else:
-            page = gh_data_fetch_and_archive_ref_luaunit_code(session, pnb)
+            page = gh_fetch_ref_luaunit_code(session, pnb)
 
         page_projects = extend_project_info( session, projects, page, pnb, have_luaunit )
         # print( page_projects )
@@ -477,6 +578,7 @@ def git_commit_and_push():
 ACTIONS = {
     'watch_luarocks': (watch_luarocks, 'Retrieve information from luarocks about luaunit'),
     'watch_gh_data':  (watch_gh_data, 'Retrieve projects using luaunit in Github (quick)'),
+    'watch_deep_gh_data':  (watch_deep_gh_data, 'Retrieve projects using luaunit in Github (quick)'),
     'watch_gh_metadata':  (watch_gh_metadata, 'Retrieve information about luaunit project in GitHub (quick)'),
     'gh_push': (git_commit_and_push, 'Push update of the DB to Git'),
     'analyse_projects_data': (analyse_projects_data, 'Analyse all projects using a luaunit.lua file to check if some popular projects are using luaunit'),
