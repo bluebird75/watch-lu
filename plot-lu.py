@@ -7,6 +7,7 @@ import matplotlib
 import matplotlib.pyplot as pyplot
 import matplotlib.dates as dates
 import matplotlib.ticker as ticker
+import matplotlib.axes as axes
 
 GH_DATA_HAVE_LUAUNIT_FILE = 'GH_DATA_HAVE_LUAUNIT_FILE'
 GH_DATA_REF_LUAUNIT_CODE = 'GH_DATA_REF_LUAUNIT_CODE'
@@ -40,6 +41,31 @@ def moving_exp_avg(data_date, data_val):
         prev_avg = new_avg
         prev_dt = dt
     return data_avg
+
+
+def plot_cumulated_and_avg(title_data_sum, x_data_sum, y_data_sum, 
+                           title_data_avg, x_data_avg, y_data_avg):
+
+    fig, (ax1, ax2) = pyplot.subplots(2,1)
+    locator = dates.AutoDateLocator()
+    formatter = dates.ConciseDateFormatter(locator)
+
+    ax1.xaxis.set_major_locator(locator)
+    ax1.xaxis.set_major_formatter(formatter)
+    ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%dk' % (x//1000)))
+    ax1.plot_date(x_data_sum, y_data_sum, '-')
+    ax1.set_title(title_data_sum)
+    ax1.grid(True)
+
+    ax2.xaxis.set_major_locator(locator)
+    ax2.xaxis.set_major_formatter(formatter)
+    ax2.plot_date(x_data_avg, y_data_avg, '-')
+    ax2.set_title(title_data_avg)
+    ax2.grid(True)
+
+
+    pyplot.tight_layout()
+    pyplot.show()
 
 
 
@@ -126,31 +152,46 @@ def graphics_projects_using_lu(data):
     ax2.grid(True)
     ax2.plot_date(quart_dt_avg_dates, quart_dt_avg_delta, 'r-',)
 
-
     pyplot.tight_layout()
     pyplot.show()
 
+def graphics_have_lu_vs_ref_lu(data):
+    nb_ref_lu = list(reversed(data[GH_DATA_REF_LUAUNIT_CODE]))
+    nb_ref_lu_dict = dict(nb_ref_lu)
 
-def plot_cumulated_and_avg(title_data_sum, x_data_sum, y_data_sum, 
-                           title_data_avg, x_data_avg, y_data_avg):
+    nb_have_lu = list(reversed(data[GH_DATA_HAVE_LUAUNIT_FILE]))
+    nb_have_lu_dict = dict(nb_have_lu)
+
+    not_in_have_lu = set(nb_ref_lu_dict.keys()) - set(nb_have_lu_dict.keys())
+    not_in_ref_lu =  set(nb_have_lu_dict.keys()) - set(nb_ref_lu_dict.keys())
+    for k in not_in_have_lu:
+        del nb_ref_lu_dict[k]
+    for k in not_in_ref_lu:
+        del nb_have_lu_dict[k]
+
+    x_dates = [dates.datestr2num(dt)  for dt in nb_have_lu_dict.keys()]
+    y1 = nb_have_lu_dict.values()
+    y2 = [(v2-v1) for v1, v2 in zip(y1, nb_ref_lu_dict.values())]
+
+    y_ratio = [100*v1/v2 for v1, v2 in zip(y1, nb_ref_lu_dict.values())]
 
     fig, (ax1, ax2) = pyplot.subplots(2,1)
     locator = dates.AutoDateLocator()
     formatter = dates.ConciseDateFormatter(locator)
-
     ax1.xaxis.set_major_locator(locator)
     ax1.xaxis.set_major_formatter(formatter)
-    ax1.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%dk' % (x//1000)))
-    ax1.plot_date(x_data_sum, y_data_sum, '-')
-    ax1.set_title(title_data_sum)
+
+    axes.Axes.stackplot(ax1, x_dates, y1, y2)
+    ax1.set_title('GitHub projects referencing LuaUnit vs using luaunit file')
     ax1.grid(True)
 
+    ax2.set_title('Ratio of using luaunit file vs packaging')
+    ax2.grid(True)
     ax2.xaxis.set_major_locator(locator)
     ax2.xaxis.set_major_formatter(formatter)
-    ax2.plot_date(x_data_avg, y_data_avg, '-')
-    ax2.set_title(title_data_avg)
-    ax2.grid(True)
-
+    ax2.yaxis.set_major_formatter(ticker.FuncFormatter(lambda x, pos: '%d%%' % x))
+    ax2.set_ylim(0, 40)
+    ax2.plot_date(x_dates, y_ratio, '-')
 
     pyplot.tight_layout()
     pyplot.show()
@@ -159,7 +200,8 @@ def plot_cumulated_and_avg(title_data_sum, x_data_sum, y_data_sum,
 def main():
     data = import_dbdict()
     # graphics_luarocks(data)
-    graphics_projects_using_lu(data)
+    # graphics_projects_using_lu(data)
+    graphics_have_lu_vs_ref_lu(data)
 
 if __name__ == '__main__':
     main()
