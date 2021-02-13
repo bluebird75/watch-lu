@@ -249,7 +249,12 @@ def watch_gh_data():
         return
     # adjusted to count only projects for all search results
     nb_ref_luaunit_code = int(gh_fetch_ref_luaunit_code(session)['total_count'] * RATIO_NB_REF_LUAUNIT_1k_SEARCH_RESULTS)
-    nb_have_luaunit_file = int(gh_fetch_have_luaunit_file(session)['total_count'] * RATIO_HAVE_FILE_LUAUNIT_1k_SEARCH_RESULTS)
+
+    ### short and quick estimation
+    # nb_have_luaunit_file = int(gh_fetch_have_luaunit_file(session)['total_count'] * RATIO_HAVE_FILE_LUAUNIT_1k_SEARCH_RESULTS)
+    ### better: exact value for less than 1000 results
+    nb_have_luaunit_file = query_all_results(session, gh_fetch_have_luaunit_file)[2]
+
     today = datetime.date.today().isoformat()
     update_db_list(GH_DATA_HAVE_LUAUNIT_FILE, (today, nb_have_luaunit_file) )
     update_db_list( GH_DATA_REF_LUAUNIT_CODE , (today, nb_ref_luaunit_code ) )
@@ -265,17 +270,19 @@ def watch_deep_gh_data():
 
     print('Reference to LuaUnit: %d estimated with ratio %f' % (results_ref_luaunit[2], results_ref_luaunit[1]))
     print('Have luaunit.lua file: %d estimated with ratio %f' % (results_have_luaunit_file[2], results_have_luaunit_file[1]))
+    print('Number of users per projects: %f' % (results_ref_luaunit[3]))
 
 
 def query_all_results(session, query):
     '''For the given query returns:
     - the total number of items matching the query
     - the ratio of number of unique projects per 1000 results
-    - the estimated number of projects'''
+    - the estimated number of projects
+    - the average number of users per projects'''
     items_fetched = 0
     nb_items_to_fetch = -1
     page = 1
-    # user_repos = set([])
+    user_repos = set([])
     repos = set([])
 
     while nb_items_to_fetch == -1 or items_fetched < nb_items_to_fetch:
@@ -289,7 +296,7 @@ def query_all_results(session, query):
                 raise ValueError('Unknown error: %s' % message)
         nb_items_to_fetch = json_result['total_count']
         items_fetched += len(json_result['items'])
-        # user_repos.update(result['repository']['full_name'] for result in json_result['items'])
+        user_repos.update(result['repository']['full_name'] for result in json_result['items'])
         repos.update(result['repository']['name'] for result
                      in json_result['items'])
         page += 1
@@ -305,8 +312,9 @@ def query_all_results(session, query):
     # repos: 357 for 1000 matches
     dbg('nb of unique repos', len(repos))
     dbg('nb of items fetched:', items_fetched)
+    dbg('nb of items user/repos,repos', (len(user_repos), len(repos)))
     ratio = len(repos)/1000
-    return nb_items_to_fetch, ratio, int(nb_items_to_fetch*ratio)
+    return nb_items_to_fetch, ratio, int(nb_items_to_fetch*ratio), len(user_repos)/len(repos)
 
 def fname_is_luaunit( fpath ):
     '''Return true if last part of the path is exactly luaunit.lua'''
